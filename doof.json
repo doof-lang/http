@@ -1,0 +1,16 @@
+{
+  "name": "http",
+  "version": "0.1.0",
+  "license": "ISC",
+  "build": {
+    "native": {
+      "extraCopyPaths": [
+        "./native_http_client.hpp"
+      ],
+      "linkLibraries": [
+        "curl"
+      ]
+    }
+  },
+  "dependencies": {}
+}
