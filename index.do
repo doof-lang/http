@@ -1,5 +1,6 @@
 import { BlobReader, BlobBuilder } from "std/blob"
 import { blobStreamToLineStream } from "std/stream"
+import { parseJsonValue, formatJsonValue } from "std/json"
 
 // Candidate HTTP client library backed by a small libcurl bridge.
 
@@ -85,7 +86,7 @@ export class HttpResponse {
   }
 
   getJsonValue(): Result<JsonValue, string> {
-    return JSON.parse(this.getText())
+    return parseJsonValue(this.getText())
   }
 }
 
@@ -119,7 +120,7 @@ export function get(client: HttpClient, url: string): Result<HttpResponse, HttpE
 
 export function postJsonValue(client: HttpClient, url: string, body: JsonValue): Result<HttpResponse, HttpError> {
   builder := BlobBuilder()
-  builder.writeString(JSON.stringify(body))
+  builder.writeString(formatJsonValue(body))
   headers := readonly [HttpHeader {
     name: "Content-Type",
     value: "application/json",
