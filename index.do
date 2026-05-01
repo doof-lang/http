@@ -147,7 +147,7 @@ export function send(client: HttpClient, request: HttpRequest): Result<HttpRespo
   )
 
   return case nativeResult {
-    s: Success => Success {
+    s: Success -> Success {
       value: HttpResponse {
         status: s.value,
         statusText: client.native.responseStatusText(),
@@ -155,7 +155,7 @@ export function send(client: HttpClient, request: HttpRequest): Result<HttpRespo
         body: client.native.responseBody(),
       }
     },
-    f: Failure => Failure {
+    f: Failure -> Failure {
       error: parseError(f.error)
     }
   }
