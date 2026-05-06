@@ -16,14 +16,16 @@ class BodyChunkStream implements Stream<readonly byte[]> {
   chunk: readonly byte[] = []
   consumed: bool = false
 
-  next(): readonly byte[] | null {
+  next(): bool {
     if this.consumed {
-      return null
+      return false
     }
 
     this.consumed = true
-    return this.chunk
+    return true
   }
+
+  value(): readonly byte[] => this.chunk
 }
 
 export class HttpHeader {
