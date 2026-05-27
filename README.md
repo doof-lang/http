@@ -7,7 +7,20 @@ HTTP client library backed by [libcurl](https://curl.se/libcurl/). Provides conv
 ## Usage
 
 ```doof
-import { createClient, get, postJsonValue, send, HttpRequest, HttpHeader } from "http"
+import {
+  Cookie,
+  SetCookie,
+  cookieValue,
+  createClient,
+  get,
+  parseCookieHeader,
+  postJsonValue,
+  renderCookieHeader,
+  renderSetCookieHeader,
+  send,
+  HttpRequest,
+  HttpHeader,
+} from "http"
 
 client := createClient()
 
@@ -29,6 +42,24 @@ request := HttpRequest {
   timeoutMs: 5000,
 }
 response := try send(client, request)
+
+// Cookies
+cookies := parseCookieHeader("session=abc; theme=dark")
+session := cookieValue(cookies, "session")
+
+cookieHeader := renderCookieHeader(readonly [
+  Cookie { name: "session", value: "abc" },
+  Cookie { name: "theme", value: "dark" },
+])
+
+setCookieHeader := renderSetCookieHeader(SetCookie {
+  name: "session",
+  value: "abc",
+  path: "/",
+  httpOnly: true,
+  secure: true,
+  sameSite: "Lax",
+})
 ```
 
 ## Exports
@@ -54,6 +85,36 @@ Send a `POST` request with a JSON-serialized body. Automatically sets `Content-T
 ### `send(client: HttpClient, request: HttpRequest): Result<HttpResponse, HttpError>`
 
 Send an arbitrary `HttpRequest`. Use this for full control over method, headers, body, timeout, and redirect behaviour.
+
+---
+
+### `parseCookieHeader(header: string): readonly Cookie[]`
+
+Parse a `Cookie` header into ordered `Cookie` entries. Parsing is lenient: empty or malformed pairs are ignored, names and values are trimmed, duplicate names are preserved, and values are not decoded.
+
+---
+
+### `renderCookieHeader(cookies: readonly Cookie[]): string`
+
+Render cookies as a `Cookie` request header value. Empty cookie names are skipped. Names and values are emitted as provided; callers are responsible for validation and encoding.
+
+---
+
+### `cookieValue(cookies: readonly Cookie[], name: string): string | null`
+
+Return the value of the first cookie matching `name`, or `null` if none exists.
+
+---
+
+### `parseSetCookieHeader(header: string): SetCookie | null`
+
+Parse a `Set-Cookie` response header into a `SetCookie`, or `null` when the required `name=value` pair is missing or invalid. Common attributes are parsed case-insensitively: `Expires`, `Max-Age`, `Domain`, `Path`, `SameSite`, `Secure`, and `HttpOnly`. Unknown attributes are ignored.
+
+---
+
+### `renderSetCookieHeader(cookie: SetCookie): string`
+
+Render a `Set-Cookie` header value using stable attribute order: `Expires`, `Max-Age`, `Domain`, `Path`, `SameSite`, `Secure`, `HttpOnly`. Values are emitted as provided; callers are responsible for validation and encoding.
 
 ---
 
@@ -127,6 +188,35 @@ A name/value pair representing a single HTTP header.
 |-------|------|-------------|
 | `name` | `string` | Header name |
 | `value` | `string` | Header value |
+
+---
+
+### `Cookie`
+
+A name/value pair parsed from or rendered into a `Cookie` request header.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `string` | Cookie name |
+| `value` | `string` | Cookie value |
+
+---
+
+### `SetCookie`
+
+A cookie plus common attributes parsed from or rendered into a `Set-Cookie` response header. Attribute values are raw strings.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | `string` | — | Cookie name |
+| `value` | `string` | — | Cookie value |
+| `expires` | `string \| null` | `null` | Raw `Expires` attribute |
+| `maxAge` | `string \| null` | `null` | Raw `Max-Age` attribute |
+| `domain` | `string \| null` | `null` | Cookie domain |
+| `path` | `string \| null` | `null` | Cookie path |
+| `sameSite` | `string \| null` | `null` | Raw `SameSite` attribute |
+| `secure` | `bool` | `false` | Whether to render `Secure` |
+| `httpOnly` | `bool` | `false` | Whether to render `HttpOnly` |
 
 ---
 
