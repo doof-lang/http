@@ -2,6 +2,37 @@ import { BlobReader, BlobBuilder } from "std/blob"
 import { blobStreamToLineStream } from "std/stream"
 import { parseJsonValue, formatJsonValue } from "std/json"
 
+import { HttpError, HttpHeader } from "./types"
+
+export { HttpError, HttpHeader } from "./types"
+
+export {
+  WEBSOCKET_CLOSE_GOING_AWAY,
+  WEBSOCKET_CLOSE_INTERNAL_ERROR,
+  WEBSOCKET_CLOSE_INVALID_PAYLOAD,
+  WEBSOCKET_CLOSE_MESSAGE_TOO_BIG,
+  WEBSOCKET_CLOSE_NORMAL,
+  WEBSOCKET_CLOSE_POLICY_VIOLATION,
+  WEBSOCKET_CLOSE_PROTOCOL_ERROR,
+  WEBSOCKET_CLOSE_UNSUPPORTED_DATA,
+  WebSocketBinary,
+  WebSocketClose,
+  WebSocketCloseCommand,
+  WebSocketCommand,
+  WebSocketConnection,
+  WebSocketError,
+  WebSocketEvent,
+  WebSocketOpen,
+  WebSocketOptions,
+  WebSocketPing,
+  WebSocketSendBinary,
+  WebSocketSendText,
+  WebSocketState,
+  WebSocketText,
+  WebSocketWritable,
+  connectWebSocket,
+} from "./websocket"
+
 // Candidate HTTP client library backed by a small libcurl bridge.
 
 export import class NativeHttpClient from "./native_http_client.hpp" {
@@ -26,11 +57,6 @@ class BodyChunkStream implements Stream<readonly byte[]> {
   }
 
   value(): readonly byte[] => this.chunk
-}
-
-export class HttpHeader {
-  readonly name: string
-  readonly value: string
 }
 
 export class Cookie {
@@ -107,12 +133,6 @@ export class HttpResponse {
   getJsonValue(): Result<JsonValue, string> {
     return parseJsonValue(this.getText())
   }
-}
-
-export class HttpError {
-  readonly kind: string
-  readonly code: string
-  readonly message: string
 }
 
 export class HttpClient {

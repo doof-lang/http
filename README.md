@@ -20,6 +20,9 @@ import {
   send,
   HttpRequest,
   HttpHeader,
+  connectWebSocket,
+  WebSocketSendText,
+  WebSocketText,
 } from "http"
 
 client := createClient()
@@ -59,6 +62,19 @@ setCookieHeader := renderSetCookieHeader(SetCookie {
   httpOnly: true,
   secure: true,
   sameSite: "Lax",
+})
+
+// WebSocket
+socket := try connectWebSocket("wss://example.com/socket")
+socket.events.onMessage((event): void => {
+  text := event as WebSocketText
+  case text {
+    s: Success -> println(s.value.text)
+    _: Failure -> {}
+  }
+})
+try! socket.commands.send(WebSocketSendText {
+  text: "hello",
 })
 ```
 
@@ -115,6 +131,46 @@ Parse a `Set-Cookie` response header into a `SetCookie`, or `null` when the requ
 ### `renderSetCookieHeader(cookie: SetCookie): string`
 
 Render a `Set-Cookie` header value using stable attribute order: `Expires`, `Max-Age`, `Domain`, `Path`, `SameSite`, `Secure`, `HttpOnly`. Values are emitted as provided; callers are responsible for validation and encoding.
+
+---
+
+### `connectWebSocket(url: string, options: WebSocketOptions = WebSocketOptions {}): Result<WebSocketConnection, HttpError>`
+
+Open a `ws://` or `wss://` WebSocket using libcurl's built-in WebSocket support. The returned connection has paired channels:
+
+- `events: ChannelReceiver<WebSocketEvent>` for open, text, binary, writable, close, and error events.
+- `commands: ChannelSender<WebSocketCommand>` for text, binary, ping, and close commands.
+
+Both channels are bounded. If inbound events reach the high-water mark, native socket reads pause until the event channel reports ready again. Command sends use the command channel's normal `Backpressure` / `SendError` result, and the native outbound queue is bounded by `commandCapacity`.
+
+---
+
+### `WebSocketOptions`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `eventCapacity` | `int` | `1024` | Maximum queued inbound events before reads pause |
+| `commandCapacity` | `int` | `1024` | Maximum queued outbound commands |
+| `headers` | `readonly HttpHeader[]` | `[]` | Additional handshake headers |
+| `timeoutMs` | `int` | `30000` | Connection timeout in milliseconds |
+
+---
+
+### `WebSocketConnection`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `url` | `string` | Original WebSocket URL |
+| `events` | `ChannelReceiver<WebSocketEvent>` | Inbound event channel |
+| `commands` | `ChannelSender<WebSocketCommand>` | Outbound command channel |
+
+#### `state(): WebSocketState`
+
+Return the current connection state.
+
+#### `close(): void`
+
+Queue a normal WebSocket close and close the public channels.
 
 ---
 

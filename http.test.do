@@ -3,7 +3,9 @@ import { Assert } from "std/assert"
 import {
   Cookie,
   SetCookie,
+  WebSocketOptions,
   cookieValue,
+  connectWebSocket,
   parseCookieHeader,
   parseSetCookieHeader,
   renderCookieHeader,
@@ -118,4 +120,18 @@ export function testRenderSetCookieHeaderUsesStableAttributeOrder(): void {
     rendered,
     "sid=abc; Expires=Wed, 21 Oct 2026 07:28:00 GMT; Max-Age=3600; Domain=example.com; Path=/; SameSite=Lax; Secure; HttpOnly",
   )
+}
+
+export function testConnectWebSocketReportsInvalidUrlAsHttpError(): void {
+  result := connectWebSocket("not-a-websocket-url", WebSocketOptions {
+    timeoutMs: 100,
+  })
+
+  case result {
+    _: Success -> Assert.fail("expected websocket connection to fail")
+    f: Failure -> {
+      Assert.notEqual(f.error.kind, "")
+      Assert.notEqual(f.error.message, "")
+    }
+  }
 }
