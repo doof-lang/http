@@ -2,7 +2,7 @@
 
 HTTP client library backed by [libcurl](https://curl.se/libcurl/). Provides convenience functions for common request patterns and a lower-level `send` function for full control over headers, body, and timeouts.
 
-> **Requires libcurl** — link via `"linkLibraries": ["curl"]` in `doof.json` (already configured in this package).
+Doof automatically acquires the pinned curl source archive into `vendor/curl` during build/test, builds a static vendored curl under `vendor/curl/.doof-build`, and links `std/http` against that vendored archive through the package's native build metadata. The host still needs the usual native build tools (`configure`, `make`, a C compiler, `pkg-config`, and OpenSSL development files), but it no longer needs a separately installed libcurl for this module.
 
 ## Usage
 

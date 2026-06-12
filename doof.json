@@ -2,14 +2,76 @@
   "name": "std/http",
   "version": "0.1.0",
   "license": "ISC",
+  "externalDependencies": {
+    "curl": {
+      "kind": "archive",
+      "url": "https://curl.se/download/curl-8.20.0.tar.xz",
+      "sha256": "63fe2dc148ba0ceae89922ef838f7e5c946272c2e78b7c59fab4b79d3ce2b896",
+      "stripComponents": 1,
+      "destination": "vendor/curl",
+      "commands": [
+        {
+          "program": "./configure",
+          "args": [
+            "--disable-shared",
+            "--enable-static",
+            "--disable-ldap",
+            "--disable-ldaps",
+            "--with-openssl",
+            "--without-brotli",
+            "--without-libidn2",
+            "--without-libpsl",
+            "--without-libssh2",
+            "--without-nghttp2",
+            "--without-nghttp3",
+            "--without-ngtcp2",
+            "--without-zlib",
+            "--without-zstd",
+            "--prefix=${destination}/.doof-build"
+          ]
+        },
+        {
+          "program": "make",
+          "args": [
+            "-j${jobs}"
+          ]
+        },
+        {
+          "program": "make",
+          "args": [
+            "install"
+          ]
+        }
+      ]
+    }
+  },
   "build": {
     "native": {
+      "includePaths": [
+        "vendor/curl/.doof-build/include"
+      ],
+      "libraryPaths": [
+        "vendor/curl/.doof-build/lib"
+      ],
+      "pkgConfigPackages": [
+        "openssl"
+      ],
       "extraCopyPaths": [
-        "./native_http_client.hpp"
+        "./native_http_client.hpp",
+        "vendor/curl/COPYING",
+        "vendor/curl/RELEASE-NOTES"
       ],
       "linkLibraries": [
         "curl"
-      ]
+      ],
+      "macos": {
+        "linkerFlags": [
+          "-Wl,-framework,CoreFoundation",
+          "-Wl,-framework,CoreServices",
+          "-Wl,-framework,Security",
+          "-Wl,-framework,SystemConfiguration"
+        ]
+      }
     }
   },
   "dependencies": {}
