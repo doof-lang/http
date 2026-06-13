@@ -11,35 +11,15 @@
       "destination": "vendor/curl",
       "commands": [
         {
-          "program": "./configure",
+          "program": "sh",
           "args": [
-            "--disable-shared",
-            "--enable-static",
-            "--disable-ldap",
-            "--disable-ldaps",
-            "--with-openssl",
-            "--without-brotli",
-            "--without-libidn2",
-            "--without-libpsl",
-            "--without-libssh2",
-            "--without-nghttp2",
-            "--without-nghttp3",
-            "--without-ngtcp2",
-            "--without-zlib",
-            "--without-zstd",
-            "--prefix=${destination}/.doof-build"
-          ]
-        },
-        {
-          "program": "make",
-          "args": [
-            "-j${jobs}"
-          ]
-        },
-        {
-          "program": "make",
-          "args": [
-            "install"
+            "${packageRoot}/build-curl.sh",
+            "${destination}",
+            "${nativeTarget}",
+            "${configureHost}",
+            "${targetTriple}",
+            "${sdkPath}",
+            "${jobs}"
           ]
         }
       ]
@@ -47,29 +27,64 @@
   },
   "build": {
     "native": {
-      "includePaths": [
-        "vendor/curl/.doof-build/include"
-      ],
-      "libraryPaths": [
-        "vendor/curl/.doof-build/lib"
-      ],
-      "pkgConfigPackages": [
-        "openssl"
-      ],
       "extraCopyPaths": [
-        "./native_http_client.hpp",
+        "native_http_client.hpp",
         "vendor/curl/COPYING",
         "vendor/curl/RELEASE-NOTES"
       ],
-      "linkLibraries": [
-        "curl"
-      ],
       "macos": {
-        "linkerFlags": [
-          "-Wl,-framework,CoreFoundation",
-          "-Wl,-framework,CoreServices",
-          "-Wl,-framework,Security",
-          "-Wl,-framework,SystemConfiguration"
+        "sourceFiles": [
+          "native_http_client_apple.mm"
+        ],
+        "frameworks": [
+          "Foundation"
+        ]
+      },
+      "iosSimulator": {
+        "sourceFiles": [
+          "native_http_client_apple.mm"
+        ],
+        "frameworks": [
+          "Foundation"
+        ]
+      },
+      "iosDevice": {
+        "sourceFiles": [
+          "native_http_client_apple.mm"
+        ],
+        "frameworks": [
+          "Foundation"
+        ]
+      },
+      "linux": {
+        "sourceFiles": [
+          "native_http_client_curl.cpp"
+        ],
+        "pkgConfigPackages": [
+          "openssl"
+        ],
+        "includePaths": [
+          "vendor/curl/.doof-build/linux/include"
+        ],
+        "libraryPaths": [
+          "vendor/curl/.doof-build/linux/lib"
+        ],
+        "linkLibraries": [
+          "curl"
+        ]
+      },
+      "windows": {
+        "sourceFiles": [
+          "native_http_client_curl.cpp"
+        ],
+        "includePaths": [
+          "vendor/curl/.doof-build/windows/include"
+        ],
+        "libraryPaths": [
+          "vendor/curl/.doof-build/windows/lib"
+        ],
+        "linkLibraries": [
+          "curl"
         ]
       }
     }

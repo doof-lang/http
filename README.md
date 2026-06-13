@@ -1,8 +1,8 @@
 # http
 
-HTTP client library backed by [libcurl](https://curl.se/libcurl/). Provides convenience functions for common request patterns and a lower-level `send` function for full control over headers, body, and timeouts.
+HTTP client library backed by native platform transports. Apple targets use `URLSession` and `URLSessionWebSocketTask`; non-Apple targets use [libcurl](https://curl.se/libcurl/). Provides convenience functions for common request patterns and a lower-level `send` function for full control over headers, body, and timeouts.
 
-Doof automatically acquires the pinned curl source archive into `vendor/curl` during build/test, builds a static vendored curl under `vendor/curl/.doof-build`, and links `std/http` against that vendored archive through the package's native build metadata. The host still needs the usual native build tools (`configure`, `make`, a C compiler, `pkg-config`, and OpenSSL development files), but it no longer needs a separately installed libcurl for this module.
+For non-Apple targets, Doof automatically acquires the pinned curl source archive into `vendor/curl`, builds a static vendored curl under `vendor/curl/.doof-build/<target>`, and links `std/http` against that vendored archive through the package's native build metadata. Apple targets still acquire the archive when needed by the package manager, but skip the curl native build and link only against Foundation.
 
 ## Usage
 
@@ -136,7 +136,7 @@ Render a `Set-Cookie` header value using stable attribute order: `Expires`, `Max
 
 ### `connectWebSocket(url: string, options: WebSocketOptions = WebSocketOptions {}): Result<WebSocketConnection, HttpError>`
 
-Open a `ws://` or `wss://` WebSocket using libcurl's built-in WebSocket support. The returned connection has paired channels:
+Open a `ws://` or `wss://` WebSocket using the native backend for the current platform. The returned connection has paired channels:
 
 - `events: ChannelReceiver<WebSocketEvent>` for open, text, binary, writable, close, and error events.
 - `commands: ChannelSender<WebSocketCommand>` for text, binary, ping, and close commands.
@@ -283,5 +283,5 @@ Returned when a request fails at the transport level (not for non-2xx status cod
 | Field | Type | Description |
 |-------|------|-------------|
 | `kind` | `string` | Error category (e.g. `"transport"`) |
-| `code` | `string` | Numeric error code from libcurl |
+| `code` | `string` | Native transport error code, such as a CURLcode or NSError code |
 | `message` | `string` | Human-readable error description |
