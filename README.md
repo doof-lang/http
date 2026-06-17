@@ -141,7 +141,7 @@ Open a `ws://` or `wss://` WebSocket using the native backend for the current pl
 - `events: ChannelReceiver<WebSocketEvent>` for open, text, binary, writable, close, and error events.
 - `commands: ChannelSender<WebSocketCommand>` for text, binary, ping, and close commands.
 
-Both channels are bounded. If inbound events reach the high-water mark, native socket reads pause until the event channel reports ready again. Command sends use the command channel's normal `Backpressure` / `SendError` result, and the native outbound queue is bounded by `commandCapacity`.
+Both channels are bounded. If inbound events reach the high-water mark, native socket reads pause until the event channel reports ready again. Outbound commands stay in the command channel until the native transport reports writable, so command backpressure and keyed coalescing are governed by the channel rather than by a second native command queue.
 
 ---
 
@@ -150,7 +150,7 @@ Both channels are bounded. If inbound events reach the high-water mark, native s
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `eventCapacity` | `int` | `1024` | Maximum queued inbound events before reads pause |
-| `commandCapacity` | `int` | `1024` | Maximum queued outbound commands |
+| `commandCapacity` | `int` | `1024` | Maximum queued outbound commands in the command channel |
 | `headers` | `readonly HttpHeader[]` | `[]` | Additional handshake headers |
 | `timeoutMs` | `int` | `30000` | Connection timeout in milliseconds |
 
