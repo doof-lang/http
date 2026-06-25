@@ -1,52 +1,123 @@
-# http
+# std/http
 
-HTTP client library backed by native platform transports. Apple targets use `URLSession` and `URLSessionWebSocketTask`; non-Apple targets use [libcurl](https://curl.se/libcurl/). Provides convenience functions for common request patterns and a lower-level `send` function for full control over headers, body, and timeouts.
+`std/http` is Doof's outbound HTTP client module. It covers ordinary HTTP
+requests, JSON request and response helpers, cookie header utilities, and
+client-side WebSocket connections.
 
-For non-Apple targets, Doof automatically acquires the pinned curl source archive into `vendor/curl`, builds a static vendored curl under `vendor/curl/.doof-build/<target>`, and links `std/http` against that vendored archive through the package's native build metadata. Apple targets still acquire the archive when needed by the package manager, but skip the curl native build and link only against Foundation.
+Apple targets use Foundation transports. Non-Apple targets use a pinned,
+vendored curl build, acquired and built by the package manager under
+`vendor/curl`. Application code uses the same Doof API on both backends.
 
-## Usage
+## Documentation
+
+- [Guide and API reference](docs/API.md) has the complete API map.
+- Tests can be run with `doof test http`.
+
+## Quick Start
+
+```doof
+import { createClient, get } from "std/http"
+
+client := createClient()
+response := try! get(client, "https://example.com")
+
+if response.ok() {
+  println(response.getText())
+} else {
+  println("HTTP ${response.status}: ${response.statusText}")
+}
+```
+
+Create one `HttpClient` with `createClient()` and reuse it. The client is an
+opaque native handle; method, URL, headers, body, timeout, and redirect behavior
+all live on each request.
+
+HTTP status codes such as `404` and `500` still return `Success<HttpResponse>`.
+Only transport-level failures, invalid URLs, and native backend errors return
+`Failure<HttpError>`.
+
+## Sending Requests
+
+Use `get` and `postJsonValue` for common calls:
+
+```doof
+import { createClient, get, postJsonValue } from "std/http"
+
+client := createClient()
+
+users := try! get(client, "https://api.example.com/users")
+
+created := try! postJsonValue(client, "https://api.example.com/users", {
+  name: "Alice",
+  role: "admin",
+})
+```
+
+Use `send` with `HttpRequest` when you need custom methods, headers, a raw body,
+timeouts, or redirect control:
+
+```doof
+import { createClient, send, HttpHeader, HttpRequest } from "std/http"
+
+request := HttpRequest {
+  method: "DELETE",
+  url: "https://api.example.com/users/42",
+  headers: [
+    HttpHeader {
+      name: "Authorization",
+      value: "Bearer ${token}",
+    },
+  ],
+  timeoutMs: 5000,
+  followRedirects: false,
+}
+
+response := try! send(createClient(), request)
+```
+
+`HttpRequest.header(name)` returns the first matching request header, ignoring
+case.
+
+## Reading Responses
+
+`HttpResponse` stores the status, status text, response headers, and buffered
+body bytes.
+
+```doof
+response := try! get(client, "https://api.example.com/users/42")
+
+contentType := response.header("Content-Type")
+bodyText := response.getText()
+bodyBytes := response.getBlob()
+json := try! response.getJsonValue()
+```
+
+Available body helpers:
+
+- `getBlob()` returns the raw body bytes.
+- `getText()` decodes the body as UTF-8.
+- `getLineStream()` exposes the buffered body as a `Stream<string>`.
+- `getJsonValue()` parses the body text as JSON.
+
+`HttpResponse.header(name)` returns the first matching response header, ignoring
+case.
+
+## Cookies
+
+The cookie helpers work with header values rather than managing a cookie jar.
+This keeps request state explicit and lets callers choose their own persistence
+and validation policy.
 
 ```doof
 import {
   Cookie,
   SetCookie,
   cookieValue,
-  createClient,
-  get,
   parseCookieHeader,
-  postJsonValue,
   renderCookieHeader,
   renderSetCookieHeader,
-  send,
-  HttpRequest,
-  HttpHeader,
-  connectWebSocket,
-  WebSocketSendText,
-  WebSocketText,
-} from "http"
+} from "std/http"
 
-client := createClient()
-
-// GET
-response := try get(client, "https://api.example.com/users")
-if response.ok() {
-  println(response.getText())
-}
-
-// POST JSON
-body: JsonValue := { name: "Alice", role: "admin" }
-response := try postJsonValue(client, "https://api.example.com/users", body)
-
-// Custom request
-request := HttpRequest {
-  method: "DELETE",
-  url: "https://api.example.com/users/42",
-  headers: [HttpHeader { name: "Authorization", value: "Bearer ${token}" }],
-  timeoutMs: 5000,
-}
-response := try send(client, request)
-
-// Cookies
 cookies := parseCookieHeader("session=abc; theme=dark")
 session := cookieValue(cookies, "session")
 
@@ -63,9 +134,31 @@ setCookieHeader := renderSetCookieHeader(SetCookie {
   secure: true,
   sameSite: "Lax",
 })
+```
 
-// WebSocket
-socket := try connectWebSocket("wss://example.com/socket")
+Parsing is intentionally lenient: malformed pairs are skipped, duplicate names
+are preserved, common `Set-Cookie` attributes are parsed case-insensitively, and
+unknown attributes are ignored. Values are emitted as provided, so callers are
+responsible for validating and encoding names and values before producing
+headers.
+
+## WebSockets
+
+`connectWebSocket(url, options)` opens a `ws://` or `wss://` connection and
+returns paired bounded channels:
+
+- `events` receives open, text, binary, writable, close, and error events.
+- `commands` sends text, binary, ping, and close commands.
+
+```doof
+import {
+  WebSocketSendText,
+  WebSocketText,
+  connectWebSocket,
+} from "std/http"
+
+socket := try! connectWebSocket("wss://example.com/socket")
+
 socket.events.onMessage((event): void => {
   text := event as WebSocketText
   case text {
@@ -73,215 +166,53 @@ socket.events.onMessage((event): void => {
     _: Failure -> {}
   }
 })
+
 try! socket.commands.send(WebSocketSendText {
   text: "hello",
 })
 ```
 
-## Exports
-
-### `createClient(): HttpClient`
-
-Create a new `HttpClient` instance. Clients are stateless between requests and safe to reuse.
-
----
-
-### `get(client: HttpClient, url: string): Result<HttpResponse, HttpError>`
-
-Send a `GET` request to `url`.
-
----
-
-### `postJsonValue(client: HttpClient, url: string, body: JsonValue): Result<HttpResponse, HttpError>`
-
-Send a `POST` request with a JSON-serialized body. Automatically sets `Content-Type: application/json`.
-
----
-
-### `send(client: HttpClient, request: HttpRequest): Result<HttpResponse, HttpError>`
-
-Send an arbitrary `HttpRequest`. Use this for full control over method, headers, body, timeout, and redirect behaviour.
-
----
-
-### `parseCookieHeader(header: string): readonly Cookie[]`
-
-Parse a `Cookie` header into ordered `Cookie` entries. Parsing is lenient: empty or malformed pairs are ignored, names and values are trimmed, duplicate names are preserved, and values are not decoded.
-
----
-
-### `renderCookieHeader(cookies: readonly Cookie[]): string`
-
-Render cookies as a `Cookie` request header value. Empty cookie names are skipped. Names and values are emitted as provided; callers are responsible for validation and encoding.
-
----
-
-### `cookieValue(cookies: readonly Cookie[], name: string): string | null`
-
-Return the value of the first cookie matching `name`, or `null` if none exists.
-
----
-
-### `parseSetCookieHeader(header: string): SetCookie | null`
-
-Parse a `Set-Cookie` response header into a `SetCookie`, or `null` when the required `name=value` pair is missing or invalid. Common attributes are parsed case-insensitively: `Expires`, `Max-Age`, `Domain`, `Path`, `SameSite`, `Secure`, and `HttpOnly`. Unknown attributes are ignored.
-
----
-
-### `renderSetCookieHeader(cookie: SetCookie): string`
-
-Render a `Set-Cookie` header value using stable attribute order: `Expires`, `Max-Age`, `Domain`, `Path`, `SameSite`, `Secure`, `HttpOnly`. Values are emitted as provided; callers are responsible for validation and encoding.
-
----
-
-### `connectWebSocket(url: string, options: WebSocketOptions = WebSocketOptions {}): Result<WebSocketConnection, HttpError>`
-
-Open a `ws://` or `wss://` WebSocket using the native backend for the current platform. The returned connection has paired channels:
-
-- `events: ChannelReceiver<WebSocketEvent>` for open, text, binary, writable, close, and error events.
-- `commands: ChannelSender<WebSocketCommand>` for text, binary, ping, and close commands.
-
-Both channels are bounded. If inbound events reach the high-water mark, native socket reads pause until the event channel reports ready again. Outbound commands stay in the command channel until the native transport reports writable, so command backpressure and keyed coalescing are governed by the channel rather than by a second native command queue.
-
----
-
-### `WebSocketOptions`
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `eventCapacity` | `int` | `1024` | Maximum queued inbound events before reads pause |
-| `commandCapacity` | `int` | `1024` | Maximum queued outbound commands in the command channel |
-| `headers` | `readonly HttpHeader[]` | `[]` | Additional handshake headers |
-| `timeoutMs` | `int` | `30000` | Connection timeout in milliseconds |
-
----
-
-### `WebSocketConnection`
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `url` | `string` | Original WebSocket URL |
-| `events` | `ChannelReceiver<WebSocketEvent>` | Inbound event channel |
-| `commands` | `ChannelSender<WebSocketCommand>` | Outbound command channel |
-
-#### `state(): WebSocketState`
-
-Return the current connection state.
-
-#### `close(): void`
-
-Queue a normal WebSocket close and close the public channels.
-
----
-
-### `HttpClient`
-
-An opaque client handle returned by `createClient`. Pass it to `get`, `postJsonValue`, or `send`.
-
----
-
-### `HttpRequest`
-
-Describes an outgoing HTTP request.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `method` | `string` | — | HTTP method (`"GET"`, `"POST"`, etc.) |
-| `url` | `string` | — | Request URL |
-| `headers` | `HttpHeader[]` | `[]` | Request headers |
-| `body` | `readonly byte[] \| null` | `null` | Raw request body |
-| `timeoutMs` | `int` | `30000` | Request timeout in milliseconds |
-| `followRedirects` | `bool` | `true` | Whether to follow HTTP redirects |
-
-#### `header(name: string): string | null`
-
-Return the value of the first header matching `name` (case-insensitive), or `null`.
-
----
-
-### `HttpResponse`
-
-Describes a completed HTTP response.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `status` | `int` | HTTP status code (e.g. `200`, `404`) |
-| `statusText` | `string` | Status line text (e.g. `"OK"`) |
-| `headers` | `readonly HttpHeader[]` | Response headers |
-| `body` | `readonly byte[]` | Raw response body bytes |
-
-#### `ok(): bool`
-
-Return `true` if the status code is in the `200`–`299` range.
-
-#### `header(name: string): string | null`
-
-Return the value of the first response header matching `name` (case-insensitive), or `null`.
-
-#### `getBlob(): readonly byte[]`
-
-Return the raw body bytes.
-
-#### `getText(): string`
-
-Decode the body as a UTF-8 string.
-
-#### `getLineStream(): Stream<string>`
-
-Return the body as a lazy `Stream<string>`, yielding one line at a time.
-
-#### `getJsonValue(): Result<JsonValue, string>`
-
-Parse the body text as JSON. Returns a `Failure` with a message if parsing fails.
-
----
-
-### `HttpHeader`
-
-A name/value pair representing a single HTTP header.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | `string` | Header name |
-| `value` | `string` | Header value |
-
----
-
-### `Cookie`
-
-A name/value pair parsed from or rendered into a `Cookie` request header.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | `string` | Cookie name |
-| `value` | `string` | Cookie value |
-
----
-
-### `SetCookie`
-
-A cookie plus common attributes parsed from or rendered into a `Set-Cookie` response header. Attribute values are raw strings.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `name` | `string` | — | Cookie name |
-| `value` | `string` | — | Cookie value |
-| `expires` | `string \| null` | `null` | Raw `Expires` attribute |
-| `maxAge` | `string \| null` | `null` | Raw `Max-Age` attribute |
-| `domain` | `string \| null` | `null` | Cookie domain |
-| `path` | `string \| null` | `null` | Cookie path |
-| `sameSite` | `string \| null` | `null` | Raw `SameSite` attribute |
-| `secure` | `bool` | `false` | Whether to render `Secure` |
-| `httpOnly` | `bool` | `false` | Whether to render `HttpOnly` |
-
----
-
-### `HttpError`
-
-Returned when a request fails at the transport level (not for non-2xx status codes — those are returned as successful `HttpResponse` values).
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `kind` | `string` | Error category (e.g. `"transport"`) |
-| `code` | `string` | Native transport error code, such as a CURLcode or NSError code |
-| `message` | `string` | Human-readable error description |
+Inbound backpressure pauses native reads when the event channel is full.
+Outbound backpressure is governed by the command channel. Use
+`WebSocketOptions` to set handshake headers, timeout, and channel capacities.
+
+## API Overview
+
+HTTP client:
+
+- `createClient(): HttpClient`
+- `get(client, url): Result<HttpResponse, HttpError>`
+- `postJsonValue(client, url, body): Result<HttpResponse, HttpError>`
+- `send(client, request): Result<HttpResponse, HttpError>`
+
+Request and response types:
+
+- `HttpClient`
+- `HttpRequest`
+- `HttpResponse`
+- `HttpHeader`
+- `HttpError`
+
+Cookie helpers:
+
+- `Cookie`
+- `SetCookie`
+- `parseCookieHeader`
+- `renderCookieHeader`
+- `parseSetCookieHeader`
+- `renderSetCookieHeader`
+- `cookieValue`
+
+WebSocket types:
+
+- `WebSocketOptions`
+- `WebSocketConnection`
+- `WebSocketEvent`
+- `WebSocketCommand`
+- `WebSocketSendText`
+- `WebSocketSendBinary`
+- `WebSocketPing`
+- `WebSocketCloseCommand`
+- `connectWebSocket`
+
+See [docs/API.md](docs/API.md) for field tables and detailed behavior.
