@@ -277,7 +277,7 @@ public:
         @autoreleasepool {
             NSURL* nsUrl = [NSURL URLWithString:nsString(url)];
             if (nsUrl == nil || nsUrl.scheme == nil || nsUrl.host == nil) {
-                return doof::Result<int32_t, std::string>::failure("invalid-url|0|invalid URL");
+                return doof::Failure<std::string>{"invalid-url|0|invalid URL"};
             }
 
             NSMutableURLRequest* request = [NSMutableURLRequest requestWithURL:nsUrl];
@@ -316,7 +316,7 @@ public:
                 [resultResponse release];
                 [resultError release];
                 [delegate release];
-                return doof::Result<int32_t, std::string>::failure(encoded);
+                return doof::Failure<std::string>{encoded};
             }
 
             NSHTTPURLResponse* httpResponse = [resultResponse isKindOfClass:[NSHTTPURLResponse class]]
@@ -327,7 +327,7 @@ public:
                 [resultResponse release];
                 [resultError release];
                 [delegate release];
-                return doof::Result<int32_t, std::string>::failure("transport|0|response was not HTTP");
+                return doof::Failure<std::string>{"transport|0|response was not HTTP"};
             }
 
             responseBody_ = vectorFromData(resultData);
@@ -337,7 +337,7 @@ public:
             [resultResponse release];
             [resultError release];
             [delegate release];
-            return doof::Result<int32_t, std::string>::success(static_cast<int32_t>(httpResponse.statusCode));
+            return doof::Success<int32_t>{static_cast<int32_t>(httpResponse.statusCode)};
         }
     }
 
@@ -389,22 +389,18 @@ public:
         @autoreleasepool {
             NSURL* nsUrl = [NSURL URLWithString:nsString(url)];
             if (nsUrl == nil || nsUrl.scheme == nil || nsUrl.host == nil) {
-                return doof::Result<std::shared_ptr<NativeHttpWebSocketConnectionImpl>, std::string>::failure(
-                    "invalid-url|0|invalid websocket URL"
-                );
+                return doof::Failure<std::string>{"invalid-url|0|invalid websocket URL"};
             }
             NSString* scheme = nsUrl.scheme.lowercaseString;
             if (![scheme isEqualToString:@"ws"] && ![scheme isEqualToString:@"wss"]) {
-                return doof::Result<std::shared_ptr<NativeHttpWebSocketConnectionImpl>, std::string>::failure(
-                    "invalid-url|0|websocket URL must use ws or wss"
-                );
+                return doof::Failure<std::string>{"invalid-url|0|websocket URL must use ws or wss"};
             }
 
             auto impl = std::shared_ptr<NativeHttpWebSocketConnectionImpl>(
                 new NativeHttpWebSocketConnectionImpl()
             );
             impl->initialize(nsUrl, requestHeaders, timeoutMs);
-            return doof::Result<std::shared_ptr<NativeHttpWebSocketConnectionImpl>, std::string>::success(impl);
+            return doof::Success<std::shared_ptr<NativeHttpWebSocketConnectionImpl>>{impl};
         }
     }
 
@@ -442,7 +438,7 @@ public:
 
     doof::Result<void, std::string> ping() {
         if (isClosedOrClosing()) {
-            return doof::Result<void, std::string>::failure("closed|0|websocket is closed");
+            return doof::Failure<std::string>{"closed|0|websocket is closed"};
         }
         auto self = shared_from_this();
         [task_ sendPingWithPongReceiveHandler:^(NSError* error) {
@@ -450,23 +446,23 @@ public:
                 self->markError(encodeError(error, "websocket ping failed"));
             }
         }];
-        return doof::Result<void, std::string>::success();
+        return doof::Success<void>{};
     }
 
     doof::Result<void, std::string> close(int32_t code, const std::string& reason) {
         if (reason.size() > 123) {
-            return doof::Result<void, std::string>::failure("invalid-close|0|websocket close reason exceeds 123 bytes");
+            return doof::Failure<std::string>{"invalid-close|0|websocket close reason exceeds 123 bytes"};
         }
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (state_ == NativeHttpWebSocketState::Closed || state_ == NativeHttpWebSocketState::Error) {
-                return doof::Result<void, std::string>::failure("closed|0|websocket is closed");
+                return doof::Failure<std::string>{"closed|0|websocket is closed"};
             }
             state_ = NativeHttpWebSocketState::Closing;
         }
         NSData* reasonData = reason.empty() ? nil : dataFromVector(std::vector<uint8_t>(reason.begin(), reason.end()));
         [task_ cancelWithCloseCode:closeCodeFromInt(code) reason:reasonData];
-        return doof::Result<void, std::string>::success();
+        return doof::Success<void>{};
     }
 
     void resumeInboundReads() {
@@ -538,25 +534,25 @@ private:
 
     void handleCommand(NativeHttpWebSocketConnection::PublicCommand command) {
         pauseCommandChannel();
-        doof::Result<void, std::string> result = doof::Result<void, std::string>::success();
+        doof::Result<void, std::string> result = doof::Success<void>{};
         bool waitsForWritable = false;
 
         if (auto* text = std::get_if<std::shared_ptr<std_::http::websocket::WebSocketSendText>>(&command)) {
             result = sendText((*text)->text);
-            waitsForWritable = result.isSuccess();
+            waitsForWritable = doof::is_success(result);
         } else if (auto* binary = std::get_if<std::shared_ptr<std_::http::websocket::WebSocketSendBinary>>(&command)) {
             result = sendBinary((*binary)->bytes);
-            waitsForWritable = result.isSuccess();
+            waitsForWritable = doof::is_success(result);
         } else if (std::holds_alternative<std::shared_ptr<std_::http::websocket::WebSocketPing>>(command)) {
             result = ping();
         } else if (auto* closeCommand = std::get_if<std::shared_ptr<std_::http::websocket::WebSocketCloseCommand>>(&command)) {
             result = close((*closeCommand)->code, (*closeCommand)->reason);
-            waitsForWritable = result.isSuccess();
+            waitsForWritable = doof::is_success(result);
         }
 
-        if (result.isFailure()) {
+        if (doof::is_failure(result)) {
             resumeCommandChannel();
-            emitErrorToPublicChannel(result.error());
+            emitErrorToPublicChannel(doof::failure_error(result));
             return;
         }
         if (!waitsForWritable) {
@@ -606,10 +602,10 @@ private:
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (state_ == NativeHttpWebSocketState::Closed || state_ == NativeHttpWebSocketState::Error) {
-                return doof::Result<void, std::string>::failure("closed|0|websocket is closed");
+                return doof::Failure<std::string>{"closed|0|websocket is closed"};
             }
             if (state_ == NativeHttpWebSocketState::Closing) {
-                return doof::Result<void, std::string>::failure("closing|0|websocket is closing");
+                return doof::Failure<std::string>{"closing|0|websocket is closing"};
             }
         }
 
@@ -636,7 +632,7 @@ private:
             }
         }];
         [message release];
-        return doof::Result<void, std::string>::success();
+        return doof::Success<void>{};
     }
 
     void receiveNext() {
@@ -881,12 +877,10 @@ doof::Result<std::shared_ptr<NativeHttpWebSocketConnection>, std::string> Native
     int32_t eventCapacity
 ) {
     auto result = NativeHttpWebSocketConnectionImpl::connect(url, requestHeaders, timeoutMs, outboundCapacity, eventCapacity);
-    if (result.isFailure()) {
-        return doof::Result<std::shared_ptr<NativeHttpWebSocketConnection>, std::string>::failure(result.error());
+    if (doof::is_failure(result)) {
+        return doof::Failure<std::string>{doof::failure_error(result)};
     }
-    return doof::Result<std::shared_ptr<NativeHttpWebSocketConnection>, std::string>::success(
-        std::make_shared<NativeHttpWebSocketConnection>(std::move(result.value()))
-    );
+    return doof::Success<std::shared_ptr<NativeHttpWebSocketConnection>>{std::make_shared<NativeHttpWebSocketConnection>(std::move(doof::success_value(result)))};
 }
 
 NativeHttpWebSocketConnection::NativeHttpWebSocketConnection(std::shared_ptr<NativeHttpWebSocketConnectionImpl> impl)

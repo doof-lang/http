@@ -200,7 +200,7 @@ public:
 
         CURL* handle = curl_easy_init();
         if (handle == nullptr) {
-            return doof::Result<int32_t, std::string>::failure("internal|0|failed to create libcurl handle");
+            return doof::Failure<std::string>{"internal|0|failed to create libcurl handle"};
         }
 
         curl_slist* headerList = parseHeaderList(requestHeaders);
@@ -243,7 +243,7 @@ public:
                 curl_slist_free_all(headerList);
             }
             curl_easy_cleanup(handle);
-            return doof::Result<int32_t, std::string>::failure(encoded);
+            return doof::Failure<std::string>{encoded};
         }
 
         long statusCode = 0;
@@ -254,7 +254,7 @@ public:
             curl_slist_free_all(headerList);
         }
         curl_easy_cleanup(handle);
-        return doof::Result<int32_t, std::string>::success(static_cast<int32_t>(statusCode));
+        return doof::Success<int32_t>{static_cast<int32_t>(statusCode)};
     }
 
     std::string responseStatusText() const { return responseStatusText_; }
@@ -325,9 +325,7 @@ public:
         ensureCurlGlobalInit();
         CURL* handle = curl_easy_init();
         if (handle == nullptr) {
-            return doof::Result<std::shared_ptr<NativeHttpWebSocketConnectionImpl>, std::string>::failure(
-                "internal|0|failed to create libcurl handle"
-            );
+            return doof::Failure<std::string>{"internal|0|failed to create libcurl handle"};
         }
 
         curl_slist* headerList = parseHeaderList(requestHeaders);
@@ -347,7 +345,7 @@ public:
                 curl_slist_free_all(headerList);
             }
             curl_easy_cleanup(handle);
-            return doof::Result<std::shared_ptr<NativeHttpWebSocketConnectionImpl>, std::string>::failure(encoded);
+            return doof::Failure<std::string>{encoded};
         }
 
         if (headerList != nullptr) {
@@ -357,16 +355,14 @@ public:
         auto connection = std::shared_ptr<NativeHttpWebSocketConnectionImpl>(
             new NativeHttpWebSocketConnectionImpl(handle)
         );
-        return doof::Result<std::shared_ptr<NativeHttpWebSocketConnectionImpl>, std::string>::success(connection);
+        return doof::Success<std::shared_ptr<NativeHttpWebSocketConnectionImpl>>{connection};
 #else
         (void)url;
         (void)requestHeaders;
         (void)timeoutMs;
         (void)outboundCapacity;
         (void)eventCapacity;
-        return doof::Result<std::shared_ptr<NativeHttpWebSocketConnectionImpl>, std::string>::failure(
-            "unsupported|0|libcurl websocket support requires libcurl 7.86.0 or newer"
-        );
+        return doof::Failure<std::string>{"unsupported|0|libcurl websocket support requires libcurl 7.86.0 or newer"};
 #endif
     }
 
@@ -398,7 +394,7 @@ public:
 
     doof::Result<void, std::string> close(int32_t code, const std::string& reason) {
         if (reason.size() > 123) {
-            return doof::Result<void, std::string>::failure("invalid-close|0|websocket close reason exceeds 123 bytes");
+            return doof::Failure<std::string>{"invalid-close|0|websocket close reason exceeds 123 bytes"};
         }
         return enqueue(OutboundKind::Close, encodeClosePayload(code, reason), code, reason);
     }
@@ -483,25 +479,25 @@ private:
 private:
     void handleCommand(NativeHttpWebSocketConnection::PublicCommand command) {
         pauseCommandChannel();
-        doof::Result<void, std::string> result = doof::Result<void, std::string>::success();
+        doof::Result<void, std::string> result = doof::Success<void>{};
         bool waitsForWritable = false;
 
         if (auto* text = std::get_if<std::shared_ptr<std_::http::websocket::WebSocketSendText>>(&command)) {
             result = sendText((*text)->text);
-            waitsForWritable = result.isSuccess();
+            waitsForWritable = doof::is_success(result);
         } else if (auto* binary = std::get_if<std::shared_ptr<std_::http::websocket::WebSocketSendBinary>>(&command)) {
             result = sendBinary((*binary)->bytes);
-            waitsForWritable = result.isSuccess();
+            waitsForWritable = doof::is_success(result);
         } else if (std::holds_alternative<std::shared_ptr<std_::http::websocket::WebSocketPing>>(command)) {
             result = ping();
         } else if (auto* closeCommand = std::get_if<std::shared_ptr<std_::http::websocket::WebSocketCloseCommand>>(&command)) {
             result = close((*closeCommand)->code, (*closeCommand)->reason);
-            waitsForWritable = result.isSuccess();
+            waitsForWritable = doof::is_success(result);
         }
 
-        if (result.isFailure()) {
+        if (doof::is_failure(result)) {
             resumeCommandChannel();
-            emitErrorToPublicChannel(result.error());
+            emitErrorToPublicChannel(doof::failure_error(result));
             return;
         }
         if (!waitsForWritable) {
@@ -560,13 +556,13 @@ private:
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (state_ == NativeHttpWebSocketState::Closed || state_ == NativeHttpWebSocketState::Error) {
-                return doof::Result<void, std::string>::failure("closed|0|websocket is closed");
+                return doof::Failure<std::string>{"closed|0|websocket is closed"};
             }
             if (state_ == NativeHttpWebSocketState::Closing && kind != OutboundKind::Close) {
-                return doof::Result<void, std::string>::failure("closing|0|websocket is closing");
+                return doof::Failure<std::string>{"closing|0|websocket is closing"};
             }
             if (outbound_.has_value()) {
-                return doof::Result<void, std::string>::failure("backpressure|0|websocket outbound queue is full");
+                return doof::Failure<std::string>{"backpressure|0|websocket outbound queue is full"};
             }
             if (kind == OutboundKind::Close) {
                 state_ = NativeHttpWebSocketState::Closing;
@@ -580,7 +576,7 @@ private:
             };
         }
         cv_.notify_all();
-        return doof::Result<void, std::string>::success();
+        return doof::Success<void>{};
     }
 
     void workerLoop() {
@@ -948,12 +944,10 @@ doof::Result<std::shared_ptr<NativeHttpWebSocketConnection>, std::string> Native
     int32_t eventCapacity
 ) {
     auto result = NativeHttpWebSocketConnectionImpl::connect(url, requestHeaders, timeoutMs, outboundCapacity, eventCapacity);
-    if (result.isFailure()) {
-        return doof::Result<std::shared_ptr<NativeHttpWebSocketConnection>, std::string>::failure(result.error());
+    if (doof::is_failure(result)) {
+        return doof::Failure<std::string>{doof::failure_error(result)};
     }
-    return doof::Result<std::shared_ptr<NativeHttpWebSocketConnection>, std::string>::success(
-        std::make_shared<NativeHttpWebSocketConnection>(std::move(result.value()))
-    );
+    return doof::Success<std::shared_ptr<NativeHttpWebSocketConnection>>{std::make_shared<NativeHttpWebSocketConnection>(std::move(doof::success_value(result)))};
 }
 
 NativeHttpWebSocketConnection::NativeHttpWebSocketConnection(std::shared_ptr<NativeHttpWebSocketConnectionImpl> impl)
