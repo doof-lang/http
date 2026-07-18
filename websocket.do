@@ -4,7 +4,7 @@ import { ChannelReceiver, ChannelSender, createChannel } from "std/event"
 import { HttpError, HttpHeader } from "./types"
 
 import class NativeHttpWebSocketConnection from "./native_http_client.hpp" {
-  static connect(
+  isolated static connect(
     url: string,
     requestHeaders: string,
     timeoutMs: int,
@@ -12,18 +12,18 @@ import class NativeHttpWebSocketConnection from "./native_http_client.hpp" {
     eventCapacity: int,
   ): Result<NativeHttpWebSocketConnection, string>
 
-  sendText(text: string): Result<void, string>
-  sendBinary(bytes: readonly byte[]): Result<void, string>
-  ping(): Result<void, string>
-  close(code: int, reason: string): Result<void, string>
-  attachChannels(
+  isolated sendText(text: string): Result<void, string>
+  isolated sendBinary(bytes: readonly byte[]): Result<void, string>
+  isolated ping(): Result<void, string>
+  isolated close(code: int, reason: string): Result<void, string>
+  isolated attachChannels(
     connection: WebSocketConnection,
     eventSender: ChannelSender<WebSocketEvent>,
     commandReceiver: ChannelReceiver<WebSocketCommand>,
   ): void
-  start(): void
-  resumeInboundReads(): void
-  state(): int
+  isolated start(): void
+  isolated resumeInboundReads(): void
+  isolated state(): int
 }
 
 export enum WebSocketState {

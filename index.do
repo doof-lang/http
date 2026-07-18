@@ -36,11 +36,11 @@ export {
 // Candidate HTTP client library backed by a small libcurl bridge.
 
 export import class NativeHttpClient from "./native_http_client.hpp" {
-  perform(method: string, url: string, requestHeaders: string, body: readonly byte[] | null,
+  isolated perform(method: string, url: string, requestHeaders: string, body: readonly byte[] | null,
           timeoutMs: int, followRedirects: bool): Result<int, string>
-  responseStatusText(): string
-  responseHeadersText(): string
-  responseBody(): readonly byte[]
+  isolated responseStatusText(): string
+  isolated responseHeadersText(): string
+  isolated responseBody(): readonly byte[]
 }
 
 class BodyChunkStream implements Stream<readonly byte[]> {
