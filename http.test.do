@@ -12,7 +12,7 @@ import {
   renderSetCookieHeader,
 } from "./index"
 
-export function testParseCookieHeaderKeepsOrderAndDuplicates(): void {
+export function testParseCookieHeaderKeepsOrderAndDuplicates(): none {
   cookies := parseCookieHeader("session=abc; theme=dark; session=override")
 
   Assert.equal(cookies.length, 3)
@@ -24,7 +24,7 @@ export function testParseCookieHeaderKeepsOrderAndDuplicates(): void {
   Assert.equal(cookies[2].value, "override")
 }
 
-export function testParseCookieHeaderIsLenient(): void {
+export function testParseCookieHeaderIsLenient(): none {
   cookies := parseCookieHeader(" ; missing ; =empty-name ; a=1 ; b = two = three ; c= ")
 
   Assert.equal(cookies.length, 3)
@@ -36,7 +36,7 @@ export function testParseCookieHeaderIsLenient(): void {
   Assert.equal(cookies[2].value, "")
 }
 
-export function testRenderCookieHeaderSkipsEmptyNames(): void {
+export function testRenderCookieHeaderSkipsEmptyNames(): none {
   rendered := renderCookieHeader(readonly [
     Cookie { name: "session", value: "abc" },
     Cookie { name: "", value: "ignored" },
@@ -46,7 +46,7 @@ export function testRenderCookieHeaderSkipsEmptyNames(): void {
   Assert.equal(rendered, "session=abc; theme=dark")
 }
 
-export function testCookieValueReturnsFirstMatch(): void {
+export function testCookieValueReturnsFirstMatch(): none {
   cookies := readonly [
     Cookie { name: "session", value: "first" },
     Cookie { name: "theme", value: "dark" },
@@ -54,10 +54,10 @@ export function testCookieValueReturnsFirstMatch(): void {
   ]
 
   Assert.equal(cookieValue(cookies, "session"), "first")
-  Assert.equal(cookieValue(cookies, "missing"), null)
+  Assert.equal(cookieValue(cookies, "missing"), none)
 }
 
-export function testParseSetCookieHeaderWithCommonAttributes(): void {
+export function testParseSetCookieHeaderWithCommonAttributes(): none {
   cookie := parseSetCookieHeader(
     "sid=abc; Expires=Wed, 21 Oct 2026 07:28:00 GMT; Max-Age=3600; Domain=example.com; Path=/; SameSite=Lax; Secure; HttpOnly",
   )!
@@ -73,7 +73,7 @@ export function testParseSetCookieHeaderWithCommonAttributes(): void {
   Assert.isTrue(cookie.httpOnly)
 }
 
-export function testParseSetCookieHeaderAttributesAreCaseInsensitive(): void {
+export function testParseSetCookieHeaderAttributesAreCaseInsensitive(): none {
   cookie := parseSetCookieHeader(
     "sid=abc; expires=soon; max-age=10; DOMAIN=example.com; path=/app; samesite=Strict; secure; HTTPONLY",
   )!
@@ -87,7 +87,7 @@ export function testParseSetCookieHeaderAttributesAreCaseInsensitive(): void {
   Assert.isTrue(cookie.httpOnly)
 }
 
-export function testParseSetCookieHeaderIgnoresUnknownAttributes(): void {
+export function testParseSetCookieHeaderIgnoresUnknownAttributes(): none {
   cookie := parseSetCookieHeader("sid=abc; Priority=High; Partitioned; Path=/")!
 
   Assert.equal(cookie.name, "sid")
@@ -97,13 +97,13 @@ export function testParseSetCookieHeaderIgnoresUnknownAttributes(): void {
   Assert.isFalse(cookie.httpOnly)
 }
 
-export function testParseSetCookieHeaderRejectsInvalidRequiredPair(): void {
-  Assert.equal(parseSetCookieHeader(""), null)
-  Assert.equal(parseSetCookieHeader("Secure; Path=/"), null)
-  Assert.equal(parseSetCookieHeader("=abc; Path=/"), null)
+export function testParseSetCookieHeaderRejectsInvalidRequiredPair(): none {
+  Assert.equal(parseSetCookieHeader(""), none)
+  Assert.equal(parseSetCookieHeader("Secure; Path=/"), none)
+  Assert.equal(parseSetCookieHeader("=abc; Path=/"), none)
 }
 
-export function testRenderSetCookieHeaderUsesStableAttributeOrder(): void {
+export function testRenderSetCookieHeaderUsesStableAttributeOrder(): none {
   rendered := renderSetCookieHeader(SetCookie {
     name: "sid",
     value: "abc",
@@ -122,7 +122,7 @@ export function testRenderSetCookieHeaderUsesStableAttributeOrder(): void {
   )
 }
 
-export function testConnectWebSocketReportsInvalidUrlAsHttpError(): void {
+export function testConnectWebSocketReportsInvalidUrlAsHttpError(): none {
   result := connectWebSocket("not-a-websocket-url", WebSocketOptions {
     timeoutMs: 100,
   })

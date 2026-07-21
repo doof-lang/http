@@ -12,17 +12,17 @@ import class NativeHttpWebSocketConnection from "./native_http_client.hpp" {
     eventCapacity: int,
   ): Result<NativeHttpWebSocketConnection, string>
 
-  isolated sendText(text: string): Result<void, string>
-  isolated sendBinary(bytes: readonly byte[]): Result<void, string>
-  isolated ping(): Result<void, string>
-  isolated close(code: int, reason: string): Result<void, string>
+  isolated sendText(text: string): Result<none, string>
+  isolated sendBinary(bytes: readonly byte[]): Result<none, string>
+  isolated ping(): Result<none, string>
+  isolated close(code: int, reason: string): Result<none, string>
   isolated attachChannels(
     connection: WebSocketConnection,
     eventSender: ChannelSender<WebSocketEvent>,
     commandReceiver: ChannelReceiver<WebSocketCommand>,
-  ): void
-  isolated start(): void
-  isolated resumeInboundReads(): void
+  ): none
+  isolated start(): none
+  isolated resumeInboundReads(): none
   isolated state(): int
 }
 
@@ -96,12 +96,12 @@ export class WebSocketError {
 
 export class WebSocketSendText {
   readonly text: string
-  readonly coalesceKey: string | null = null
+  readonly coalesceKey: string | none = none
 }
 
 export class WebSocketSendBinary {
   readonly bytes: readonly byte[]
-  readonly coalesceKey: string | null = null
+  readonly coalesceKey: string | none = none
 }
 
 export class WebSocketPing {
@@ -125,7 +125,7 @@ export class WebSocketConnection {
     return nativeStateToPublic(this.native.state())
   }
 
-  close(): void {
+  close(): none {
     ignored := this.native.close(WEBSOCKET_CLOSE_NORMAL, "")
     this.commands.close()
     this.events.close()
@@ -149,7 +149,7 @@ export function connectWebSocket(
     keepsAlive: true,
   }
 
-  let connection: WebSocketConnection | null = null
+  let connection: WebSocketConnection | none = none
   nativeResult := NativeHttpWebSocketConnection.connect(
     url,
     renderHeaders(options.headers),
@@ -158,7 +158,7 @@ export function connectWebSocket(
     options.eventCapacity,
   )
 
-  let native: NativeHttpWebSocketConnection | null = null
+  let native: NativeHttpWebSocketConnection | none = none
   case nativeResult {
     s: Success -> {
       native = s.value
@@ -194,7 +194,7 @@ export function connectWebSocket(
 function emitLocalWebSocketEvent(
   connection: WebSocketConnection,
   event: WebSocketEvent,
-): void {
+): none {
   ignored := connection.eventSender.send(event)
 }
 

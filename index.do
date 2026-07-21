@@ -36,7 +36,7 @@ export {
 // Candidate HTTP client library backed by a small libcurl bridge.
 
 export import class NativeHttpClient from "./native_http_client.hpp" {
-  isolated perform(method: string, url: string, requestHeaders: string, body: readonly byte[] | null,
+  isolated perform(method: string, url: string, requestHeaders: string, body: readonly byte[] | none,
           timeoutMs: int, followRedirects: bool): Result<int, string>
   isolated responseStatusText(): string
   isolated responseHeadersText(): string
@@ -67,31 +67,31 @@ export class Cookie {
 export class SetCookie {
   readonly name: string
   readonly value: string
-  readonly domain: string | null = null
-  readonly path: string | null = null
-  readonly expires: string | null = null
-  readonly maxAge: string | null = null
+  readonly domain: string | none = none
+  readonly path: string | none = none
+  readonly expires: string | none = none
+  readonly maxAge: string | none = none
   readonly secure: bool = false
   readonly httpOnly: bool = false
-  readonly sameSite: string | null = null
+  readonly sameSite: string | none = none
 }
 
 export class HttpRequest {
   readonly method: string
   readonly url: string
   readonly headers: HttpHeader[] = []
-  readonly body: readonly byte[] | null = null
+  readonly body: readonly byte[] | none = none
   readonly timeoutMs: int = 30000
   readonly followRedirects: bool = true
 
-  header(name: string): string | null {
+  header(name: string): string | none {
     lowerName := name.toLowerCase()
     for entry of headers {
       if entry.name.toLowerCase() == lowerName {
         return entry.value
       }
     }
-    return null
+    return none
   }
 }
 
@@ -105,14 +105,14 @@ export class HttpResponse {
     return this.status >= 200 && this.status < 300
   }
 
-  header(name: string): string | null {
+  header(name: string): string | none {
     lowerName := name.toLowerCase()
     for entry of headers {
       if entry.name.toLowerCase() == lowerName {
         return entry.value
       }
     }
-    return null
+    return none
   }
 
   getBlob(): readonly byte[] {
@@ -149,7 +149,7 @@ function newRequest(method: string, url: string): HttpRequest {
   return HttpRequest {
     method,
     url,
-    body: null,
+    body: none,
   }
 }
 
@@ -215,30 +215,30 @@ export function renderCookieHeader(cookies: readonly Cookie[]): string {
   return text
 }
 
-export function parseSetCookieHeader(header: string): SetCookie | null {
+export function parseSetCookieHeader(header: string): SetCookie | none {
   parts := header.split(";")
   if parts.length == 0 {
-    return null
+    return none
   }
 
   firstPart := parts[0].trim()
   firstSeparator := firstPart.indexOf("=")
   if firstSeparator <= 0 {
-    return null
+    return none
   }
 
   name := firstPart.substring(0, firstSeparator).trim()
   if name == "" {
-    return null
+    return none
   }
 
-  let domain: string | null = null
-  let path: string | null = null
-  let expires: string | null = null
-  let maxAge: string | null = null
+  let domain: string | none = none
+  let path: string | none = none
+  let expires: string | none = none
+  let maxAge: string | none = none
   let secure = false
   let httpOnly = false
-  let sameSite: string | null = null
+  let sameSite: string | none = none
 
   let index = 1
   while index < parts.length {
@@ -290,23 +290,23 @@ export function parseSetCookieHeader(header: string): SetCookie | null {
 export function renderSetCookieHeader(cookie: SetCookie): string {
   let text = "${cookie.name}=${cookie.value}"
   expires := cookie.expires
-  if expires != null {
+  if expires != none {
     text += "; Expires=${expires!}"
   }
   maxAge := cookie.maxAge
-  if maxAge != null {
+  if maxAge != none {
     text += "; Max-Age=${maxAge!}"
   }
   domain := cookie.domain
-  if domain != null {
+  if domain != none {
     text += "; Domain=${domain!}"
   }
   path := cookie.path
-  if path != null {
+  if path != none {
     text += "; Path=${path!}"
   }
   sameSite := cookie.sameSite
-  if sameSite != null {
+  if sameSite != none {
     text += "; SameSite=${sameSite!}"
   }
   if cookie.secure {
@@ -318,13 +318,13 @@ export function renderSetCookieHeader(cookie: SetCookie): string {
   return text
 }
 
-export function cookieValue(cookies: readonly Cookie[], name: string): string | null {
+export function cookieValue(cookies: readonly Cookie[], name: string): string | none {
   for cookie of cookies {
     if cookie.name == name {
       return cookie.value
     }
   }
-  return null
+  return none
 }
 
 export function send(client: HttpClient, request: HttpRequest): Result<HttpResponse, HttpError> {
