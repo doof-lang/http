@@ -45,7 +45,7 @@ export import class NativeHttpClient from "./native_http_client.hpp" {
 
 class BodyChunkStream implements Stream<readonly byte[]> {
   chunk: readonly byte[] = []
-  consumed: bool = false
+  let consumed: bool = false
 
   next(): bool {
     if this.consumed {
@@ -194,7 +194,7 @@ export function parseCookieHeader(header: string): readonly Cookie[] {
       value: part.slice(separator + 1).trim(),
     })
   }
-  return cookies.buildReadonly()
+  return cookies.drainToReadonly()
 }
 
 export function renderCookieHeader(cookies: readonly Cookie[]): string {
@@ -378,7 +378,7 @@ function parseHeaders(headerText: string): readonly HttpHeader[] {
       value: line.slice(separator + 1).trim(),
     })
   }
-  return headers.buildReadonly()
+  return headers.drainToReadonly()
 }
 
 function parseError(raw: string): HttpError {
