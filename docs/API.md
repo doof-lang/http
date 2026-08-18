@@ -52,6 +52,18 @@ Check `response.ok()` or inspect `response.status` for application-level
 handling. Transport errors, invalid URLs, and backend failures return
 `Failure<HttpError>`.
 
+For caller-supplied `http`, `https`, `ws`, and `wss` URLs, non-ASCII hostname
+labels are converted to RFC 3492 `xn--` form before native transport. Scheme,
+userinfo, port, path, query, and fragment text are preserved, and public request
+and connection objects retain the original URL. Redirect URLs are handled by
+the native backend.
+
+This conversion is intentionally not full IDNA processing. It does not perform
+Unicode normalization, case folding, UTS #46 mapping, prohibited-character,
+bidirectional or contextual checks, DNS length validation, or Unicode-dot
+mapping. Conversion failures return `HttpError` with kind `invalid-url` and
+code `0`.
+
 ## Response Bodies
 
 Responses are buffered by the native backend and exposed through helpers:

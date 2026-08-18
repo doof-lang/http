@@ -2,6 +2,7 @@ import { BlobBuilder } from "std/blob"
 import { ChannelReceiver, ChannelSender, createChannel } from "std/event"
 
 import { HttpError, HttpHeader } from "./types"
+import { prepareTransportUrl } from "./transport_url"
 
 import class NativeHttpWebSocketConnection from "./native_http_client.hpp" {
   isolated static connect(
@@ -140,6 +141,10 @@ export function connectWebSocket(
     panic("WebSocket channel capacities must be positive")
   }
 
+  transportUrl := prepareTransportUrl(url) else error {
+    return Failure { error: error }
+  }
+
   (eventSender, events) := createChannel<WebSocketEvent>{
     capacity: options.eventCapacity,
     keepsAlive: true,
@@ -151,7 +156,7 @@ export function connectWebSocket(
 
   let connection: WebSocketConnection | none = none
   nativeResult := NativeHttpWebSocketConnection.connect(
-    url,
+    transportUrl,
     renderHeaders(options.headers),
     options.timeoutMs,
     1,

@@ -3,6 +3,7 @@ import { blobStreamToLineStream } from "std/stream"
 import { parseJsonValue, formatJsonValue } from "std/json"
 
 import { HttpError, HttpHeader } from "./types"
+import { prepareTransportUrl } from "./transport_url"
 
 export { HttpError, HttpHeader } from "./types"
 
@@ -328,9 +329,12 @@ export function cookieValue(cookies: readonly Cookie[], name: string): string | 
 }
 
 export function send(client: HttpClient, request: HttpRequest): Result<HttpResponse, HttpError> {
+  transportUrl := prepareTransportUrl(request.url) else error {
+    return Failure { error: error }
+  }
   nativeResult := client.native.perform(
     request.method,
-    request.url,
+    transportUrl,
     renderHeaders(request.headers),
     request.body,
     request.timeoutMs,

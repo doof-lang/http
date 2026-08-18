@@ -36,6 +36,13 @@ HTTP status codes such as `404` and `500` still return `Success<HttpResponse>`.
 Only transport-level failures, invalid URLs, and native backend errors return
 `Failure<HttpError>`.
 
+Unicode hostname labels in caller-supplied `http`, `https`, `ws`, and `wss`
+URLs are converted to RFC 3492 `xn--` form before reaching the native backend.
+The original `HttpRequest.url` and `WebSocketConnection.url` remain unchanged.
+This is Punycode conversion rather than full IDNA processing: it does not apply
+Unicode normalization, case mapping, UTS #46 rules, or DNS character and length
+validation. Redirect URLs remain managed by the native transport.
+
 ## Sending Requests
 
 Use `get` and `postJsonValue` for common calls:
