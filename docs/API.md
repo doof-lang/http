@@ -4,8 +4,10 @@
 around reusable clients, explicit request and response objects, cookie header
 helpers, and outbound WebSockets.
 
-Apple targets use Foundation transports. Non-Apple targets use a pinned,
-vendored curl build. The transport backend is hidden behind the Doof API.
+Apple targets use Foundation transports, Windows uses WinHTTP, other native
+targets use a pinned, vendored curl build, and browser WebAssembly uses the
+host's `fetch()` through JavaScript Promise Integration (JSPI). The transport
+backend is hidden behind the Doof API.
 
 ## Client Lifecycle
 
@@ -51,6 +53,45 @@ HTTP error status codes are represented as successful `HttpResponse` values.
 Check `response.ok()` or inspect `response.status` for application-level
 handling. Transport errors, invalid URLs, and backend failures return
 `Failure<HttpError>`.
+
+### Browser WebAssembly flow
+
+Browser WebAssembly uses the same synchronous `get`, `postJsonValue`, and
+`send` functions as native targets. The JavaScript host supplies the
+`doof_http` imports from `doof-http.js`; its `perform_request` import is a
+`WebAssembly.Suspending` function that awaits `fetch()` and the buffered
+response body. Any export or callback that can transitively reach HTTP must be
+entered through `WebAssembly.promising` so the suspended computation has a
+matching promise-bearing host entry.
+
+Create and attach one bridge per WebAssembly instance:
+
+```js
+import { createHttpBridge } from "./std/http/doof-http.js";
+
+const bridge = createHttpBridge({
+  // Optional; defaults to unlimited.
+  maxResponseBytes: 16 * 1024 * 1024,
+});
+const result = await WebAssembly.instantiateStreaming(fetch("./app.wasm"), {
+  doof_http: bridge.imports,
+});
+const instance = result.instance ?? result;
+bridge.attach(instance);
+
+const call = WebAssembly.promising(instance.exports.doof_export_call);
+```
+
+Expected fetch failures are returned as `HttpError`; they do not reject the
+JSPI Promise. A rejected Promise or WebAssembly trap indicates a host bridge or
+runtime failure instead.
+
+The browser controls CORS, forbidden headers, cookie credentials, and exposed
+response headers. The bridge uses fetch's default `same-origin` credentials
+policy and maps `followRedirects` to `redirect: "follow"` or `"manual"`.
+`Set-Cookie` is not visible to application code, and manual cross-origin
+redirects can be opaque. Response bodies are buffered. WebSockets remain
+native-only.
 
 For caller-supplied `http`, `https`, `ws`, and `wss` URLs, non-ASCII hostname
 labels are converted to RFC 3492 `xn--` form before native transport. Scheme,

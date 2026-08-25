@@ -5,7 +5,8 @@
   "build": {
     "native": {
       "extraCopyPaths": [
-        "native_http_client.hpp"
+        "native_http_client.hpp",
+        "doof-http.js"
       ],
       "macos": {
         "sourceFiles": [
@@ -37,6 +38,11 @@
         ],
         "linkLibraries": [
           "winhttp"
+        ]
+      },
+      "wasm": {
+        "sourceFiles": [
+          "native_http_client_wasm.cpp"
         ]
       }
     }

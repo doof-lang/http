@@ -4,14 +4,17 @@
 requests, JSON request and response helpers, cookie header utilities, and
 client-side WebSocket connections.
 
-Apple targets use Foundation transports. Non-Apple targets use a pinned,
-vendored curl build, acquired and built by the package manager under
-`vendor/curl`. Application code uses the same Doof API on both backends.
+Apple targets use Foundation transports. Windows uses WinHTTP, other native
+targets use a pinned, vendored curl build, and browser WebAssembly uses the
+host's `fetch()` through JavaScript Promise Integration (JSPI). Application
+code uses the same Doof API on every backend.
 
 ## Documentation
 
 - [Guide and API reference](docs/API.md) has the complete API map.
 - Tests can be run with `doof test http`.
+- Browser bridge tests can be run with
+  `node --test http/tests/doof-http.test.mjs`.
 
 ## Quick Start
 
@@ -35,6 +38,45 @@ all live on each request.
 HTTP status codes such as `404` and `500` still return `Success<HttpResponse>`.
 Only transport-level failures, invalid URLs, and native backend errors return
 `Failure<HttpError>`.
+
+## Browser WebAssembly
+
+The WebAssembly backend preserves the synchronous Doof API. While `send`,
+`get`, or `postJsonValue` is waiting for browser `fetch()`, JSPI suspends the
+WebAssembly computation and resumes it when the Promise settles.
+
+The JavaScript host must attach the included bridge when instantiating the
+module. Any WebAssembly export that can reach an HTTP request must be invoked
+through `WebAssembly.promising`:
+
+```js
+import { createHttpBridge } from "./std/http/doof-http.js";
+
+const http = createHttpBridge();
+const result = await WebAssembly.instantiateStreaming(fetch("./app.wasm"), {
+  doof_http: http.imports,
+  // Include the application's normal WASI and other stdlib imports here.
+});
+const instance = result.instance ?? result;
+http.attach(instance);
+
+const load = WebAssembly.promising(instance.exports.doof_export_load);
+const resultPointer = await load(parametersPointer);
+```
+
+The normal Doof WebAssembly JSON ABI still applies to exported function
+arguments and results. A host loader should wrap exports centrally rather than
+requiring individual call sites to use `WebAssembly.promising`.
+
+Browser security and fetch semantics apply. CORS controls cross-origin access,
+forbidden request headers cannot be set, `Set-Cookie` is not exposed, cookies
+use fetch's default `same-origin` credentials policy, and manual cross-origin
+redirects can produce opaque responses. Bodies are currently buffered. Hosts
+may set a limit with `createHttpBridge({ maxResponseBytes })`; the default is
+unlimited. WebSockets do not yet have a WebAssembly transport.
+
+The bridge checks for JSPI when it is created and reports a clear error on
+unsupported browsers.
 
 Unicode hostname labels in caller-supplied `http`, `https`, `ws`, and `wss`
 URLs are converted to RFC 3492 `xn--` form before reaching the native backend.
