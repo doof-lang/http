@@ -484,11 +484,9 @@ public:
 
     void attachChannels(
         std::shared_ptr<std_::http::websocket::WebSocketConnection> connection,
-        std::shared_ptr<NativeHttpWebSocketConnection::EventSender> eventSender,
-        std::shared_ptr<NativeHttpWebSocketConnection::CommandReceiver> commandReceiver
+        std::shared_ptr<doof_event::NativeChannel> eventChannel,
+        std::shared_ptr<doof_event::NativeChannel> commandChannel
     ) {
-        std::shared_ptr<doof_event::NativeChannel> eventChannel = eventSender ? eventSender->native : nullptr;
-        std::shared_ptr<doof_event::NativeChannel> commandChannel = commandReceiver ? commandReceiver->native : nullptr;
         {
             std::lock_guard<std::mutex> lock(mutex_);
             connection_ = connection;
@@ -893,12 +891,12 @@ doof::Result<void, std::string> NativeHttpWebSocketConnection::sendText(const st
 doof::Result<void, std::string> NativeHttpWebSocketConnection::sendBinary(std::shared_ptr<std::vector<uint8_t>> bytes) { return impl_->sendBinary(std::move(bytes)); }
 doof::Result<void, std::string> NativeHttpWebSocketConnection::ping() { return impl_->ping(); }
 doof::Result<void, std::string> NativeHttpWebSocketConnection::close(int32_t code, const std::string& reason) { return impl_->close(code, reason); }
-void NativeHttpWebSocketConnection::attachChannels(
+void NativeHttpWebSocketConnection::attachNativeChannels(
     std::shared_ptr<std_::http::websocket::WebSocketConnection> connection,
-    std::shared_ptr<EventSender> eventSender,
-    std::shared_ptr<CommandReceiver> commandReceiver
+    std::shared_ptr<doof_event::NativeChannel> eventChannel,
+    std::shared_ptr<doof_event::NativeChannel> commandChannel
 ) {
-    impl_->attachChannels(std::move(connection), std::move(eventSender), std::move(commandReceiver));
+    impl_->attachChannels(std::move(connection), std::move(eventChannel), std::move(commandChannel));
 }
 void NativeHttpWebSocketConnection::resumeInboundReads() { impl_->resumeInboundReads(); }
 int32_t NativeHttpWebSocketConnection::state() const { return impl_->state(); }

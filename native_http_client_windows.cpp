@@ -179,6 +179,6 @@ doof::Result<void, std::string> NativeHttpWebSocketConnection::sendText(const st
 doof::Result<void, std::string> NativeHttpWebSocketConnection::sendBinary(std::shared_ptr<std::vector<uint8_t>>) { return doof::Failure<std::string>{"WebSocket support is not implemented on Windows"}; }
 doof::Result<void, std::string> NativeHttpWebSocketConnection::ping() { return doof::Failure<std::string>{"WebSocket support is not implemented on Windows"}; }
 doof::Result<void, std::string> NativeHttpWebSocketConnection::close(int32_t, const std::string&) { return doof::Failure<std::string>{"WebSocket support is not implemented on Windows"}; }
-void NativeHttpWebSocketConnection::attachChannels(std::shared_ptr<std_::http::websocket::WebSocketConnection>, std::shared_ptr<EventSender>, std::shared_ptr<CommandReceiver>) {}
+void NativeHttpWebSocketConnection::attachNativeChannels(std::shared_ptr<std_::http::websocket::WebSocketConnection>, std::shared_ptr<doof_event::NativeChannel>, std::shared_ptr<doof_event::NativeChannel>) {}
 void NativeHttpWebSocketConnection::resumeInboundReads() {}
 int32_t NativeHttpWebSocketConnection::state() const { return static_cast<int32_t>(NativeHttpWebSocketState::Error); }

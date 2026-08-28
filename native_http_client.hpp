@@ -8,11 +8,8 @@
 
 #include "doof_runtime.hpp"
 
-namespace std_::event::index {
-template <typename T>
-struct ChannelReceiver;
-template <typename T>
-struct ChannelSender;
+namespace doof_event {
+class NativeChannel;
 }
 
 namespace std_::http::types {
@@ -119,9 +116,6 @@ public:
         std::shared_ptr<std_::http::websocket::WebSocketPing>,
         std::shared_ptr<std_::http::websocket::WebSocketCloseCommand>
     >;
-    using EventSender = std_::event::index::ChannelSender<PublicEvent>;
-    using CommandReceiver = std_::event::index::ChannelReceiver<PublicCommand>;
-
     static doof::Result<std::shared_ptr<NativeHttpWebSocketConnection>, std::string> connect(
         const std::string& url,
         const std::string& requestHeaders,
@@ -138,14 +132,26 @@ public:
     doof::Result<void, std::string> sendBinary(std::shared_ptr<std::vector<uint8_t>> bytes);
     doof::Result<void, std::string> ping();
     doof::Result<void, std::string> close(int32_t code, const std::string& reason);
+    template <typename EventSender, typename CommandReceiver>
     void attachChannels(
         std::shared_ptr<std_::http::websocket::WebSocketConnection> connection,
         std::shared_ptr<EventSender> eventSender,
         std::shared_ptr<CommandReceiver> commandReceiver
-    );
+    ) {
+        attachNativeChannels(
+            connection,
+            eventSender ? eventSender->native : nullptr,
+            commandReceiver ? commandReceiver->native : nullptr
+        );
+    }
     void resumeInboundReads();
     int32_t state() const;
 
 private:
+    void attachNativeChannels(
+        std::shared_ptr<std_::http::websocket::WebSocketConnection> connection,
+        std::shared_ptr<doof_event::NativeChannel> eventChannel,
+        std::shared_ptr<doof_event::NativeChannel> commandChannel
+    );
     std::shared_ptr<class NativeHttpWebSocketConnectionImpl> impl_;
 };

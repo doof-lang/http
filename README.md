@@ -4,8 +4,8 @@
 requests, JSON request and response helpers, cookie header utilities, and
 client-side WebSocket connections.
 
-Apple targets use Foundation transports. Windows uses WinHTTP, other native
-targets use a pinned, vendored curl build, and browser WebAssembly uses the
+Apple targets use Foundation transports. Windows uses WinHTTP, Linux uses the
+pinned, statically built curl transport, and browser WebAssembly uses the
 host's `fetch()` through JavaScript Promise Integration (JSPI). Application
 code uses the same Doof API on every backend.
 

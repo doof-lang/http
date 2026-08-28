@@ -4,8 +4,8 @@
 around reusable clients, explicit request and response objects, cookie header
 helpers, and outbound WebSockets.
 
-Apple targets use Foundation transports, Windows uses WinHTTP, other native
-targets use a pinned, vendored curl build, and browser WebAssembly uses the
+Apple targets use Foundation transports, Windows uses WinHTTP, Linux uses the
+pinned, statically built curl transport, and browser WebAssembly uses the
 host's `fetch()` through JavaScript Promise Integration (JSPI). The transport
 backend is hidden behind the Doof API.
 
@@ -409,7 +409,9 @@ Send a ping frame.
 
 ## Backend Notes
 
-Non-Apple targets acquire the pinned curl source archive into `vendor/curl`,
-build a static curl archive under `vendor/curl/.doof-build/<target>`, and link
-against that archive through the package's native build metadata. Apple targets
-link against Foundation and do not build curl.
+Linux builds acquire the pinned curl source archive into `vendor/curl`, build a
+static archive under `vendor/curl/.doof-build/linux`, and link it through the
+package's native build metadata. The curl build uses the host OpenSSL development
+package discovered through `pkg-config`. Apple targets link against Foundation,
+Windows links against WinHTTP, and browser WebAssembly uses the JavaScript fetch
+bridge.

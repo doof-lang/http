@@ -2,11 +2,36 @@
   "name": "std/http",
   "version": "0.1.0",
   "license": "ISC",
+  "externalDependencies": {
+    "curl": {
+      "kind": "archive",
+      "url": "https://curl.se/download/curl-8.20.0.tar.xz",
+      "sha256": "63fe2dc148ba0ceae89922ef838f7e5c946272c2e78b7c59fab4b79d3ce2b896",
+      "stripComponents": 1,
+      "destination": "vendor/curl",
+      "commands": [
+        {
+          "program": "sh",
+          "args": [
+            "${packageRoot}/build-curl.sh",
+            "${destination}",
+            "${nativeTarget}",
+            "${configureHost}",
+            "${targetTriple}",
+            "${sdkPath}",
+            "${jobs}"
+          ]
+        }
+      ]
+    }
+  },
   "build": {
     "native": {
       "extraCopyPaths": [
         "native_http_client.hpp",
-        "doof-http.js"
+        "doof-http.js",
+        "vendor/curl/COPYING",
+        "vendor/curl/RELEASE-NOTES"
       ],
       "macos": {
         "sourceFiles": [
@@ -30,6 +55,29 @@
         ],
         "frameworks": [
           "Foundation"
+        ]
+      },
+      "linux": {
+        "sourceFiles": [
+          "native_http_client_curl.cpp"
+        ],
+        "pkgConfigPackages": [
+          "openssl"
+        ],
+        "compilerFlags": [
+          "-pthread"
+        ],
+        "linkerFlags": [
+          "-pthread"
+        ],
+        "includePaths": [
+          "vendor/curl/.doof-build/linux/include"
+        ],
+        "libraryPaths": [
+          "vendor/curl/.doof-build/linux/lib"
+        ],
+        "linkLibraries": [
+          "curl"
         ]
       },
       "windows": {
