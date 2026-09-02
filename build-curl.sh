@@ -8,21 +8,30 @@ target_triple=$4
 sdk_path=$5
 jobs=$6
 
-cd "$destination"
-
 case "$native_target" in
-  macos|ios-simulator|ios-device)
-    echo "Skipping curl build for $native_target; std/http uses URLSession on Apple targets."
+  linux)
+    ;;
+  *)
+    echo "Skipping curl build for $native_target; std/http uses curl only on Linux."
     exit 0
     ;;
 esac
+
+cd "$destination"
+
+prefix="$destination/.doof-build/$native_target"
+stamp="$prefix/.doof-prepared"
+configuration="$native_target|$configure_host|$target_triple|$sdk_path"
+if [ -f "$stamp" ] && [ -f "$prefix/lib/libcurl.a" ] && [ -d "$prefix/include/curl" ] &&
+  [ "$(cat "$stamp")" = "$configuration" ]; then
+  exit 0
+fi
 
 if [ -f Makefile ]; then
   make distclean
 fi
 
 work_dir=".doof-build-work/$native_target"
-prefix="$destination/.doof-build/$native_target"
 
 mkdir -p "$work_dir"
 
@@ -53,3 +62,4 @@ common_args="
 make -C "$work_dir/lib" "-j$jobs"
 make -C "$work_dir/include" install
 make -C "$work_dir/lib" install
+printf '%s' "$configuration" > "$stamp"

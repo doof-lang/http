@@ -409,7 +409,7 @@ Send a ping frame.
 
 ## Backend Notes
 
-Linux builds acquire the pinned curl source archive into `vendor/curl`, build a
+Linux builds use the curated curl source tree bundled in `vendor/curl`, build a
 static archive under `vendor/curl/.doof-build/linux`, and link it through the
 package's native build metadata. The curl build uses the host OpenSSL development
 package discovered through `pkg-config`. Apple targets link against Foundation,
