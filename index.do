@@ -131,7 +131,7 @@ export class HttpResponse {
     })
   }
 
-  getJsonValue(): Result<JsonValue, string> {
+  getJsonValue(): Result<SerialValue, string> {
     return parseJsonValue(this.getText())
   }
 }
@@ -158,7 +158,7 @@ export function get(client: HttpClient, url: string): Result<HttpResponse, HttpE
   return send(client, newRequest("GET", url))
 }
 
-export function postJsonValue(client: HttpClient, url: string, body: JsonValue): Result<HttpResponse, HttpError> {
+export function postJsonValue(client: HttpClient, url: string, body: SerialValue): Result<HttpResponse, HttpError> {
   builder := BlobBuilder()
   builder.writeString(formatJsonValue(body))
   headers := readonly [HttpHeader {

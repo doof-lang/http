@@ -200,7 +200,7 @@ Create a new `HttpClient`. Reuse clients across requests.
 
 Send a `GET` request to `url`.
 
-### `postJsonValue(client: HttpClient, url: string, body: JsonValue): Result<HttpResponse, HttpError>`
+### `postJsonValue(client: HttpClient, url: string, body: SerialValue): Result<HttpResponse, HttpError>`
 
 Send a `POST` request with a JSON-serialized body. Automatically sets
 `Content-Type: application/json`.
@@ -263,7 +263,7 @@ Decode the response body as UTF-8.
 
 Return the response body as a line stream.
 
-#### `getJsonValue(): Result<JsonValue, string>`
+#### `getJsonValue(): Result<SerialValue, string>`
 
 Parse the response body as JSON.
 
