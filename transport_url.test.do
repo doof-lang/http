@@ -6,30 +6,30 @@ import { prepareTransportUrl } from "./transport_url"
 export function testPrepareTransportUrlEncodesOnlyHostname(): none {
   url := "HTTPS://usér:pass@例え.テスト:8443/a/b?next=例#場所"
   Assert.equal(
-    try! prepareTransportUrl(url),
+    prepareTransportUrl(url)!,
     "HTTPS://usér:pass@xn--r8jz45g.xn--zckzah:8443/a/b?next=例#場所",
   )
 }
 
 export function testPrepareTransportUrlHandlesAllSupportedSchemes(): none {
-  Assert.equal(try! prepareTransportUrl("http://bücher.example"), "http://xn--bcher-kva.example")
-  Assert.equal(try! prepareTransportUrl("https://bücher.example"), "https://xn--bcher-kva.example")
-  Assert.equal(try! prepareTransportUrl("ws://bücher.example"), "ws://xn--bcher-kva.example")
-  Assert.equal(try! prepareTransportUrl("wss://bücher.example"), "wss://xn--bcher-kva.example")
+  Assert.equal(prepareTransportUrl("http://bücher.example")!, "http://xn--bcher-kva.example")
+  Assert.equal(prepareTransportUrl("https://bücher.example")!, "https://xn--bcher-kva.example")
+  Assert.equal(prepareTransportUrl("ws://bücher.example")!, "ws://xn--bcher-kva.example")
+  Assert.equal(prepareTransportUrl("wss://bücher.example")!, "wss://xn--bcher-kva.example")
 }
 
 export function testPrepareTransportUrlPreservesAsciiAndIpHosts(): none {
-  Assert.equal(try! prepareTransportUrl("https://Example.COM:443/path"), "https://Example.COM:443/path")
-  Assert.equal(try! prepareTransportUrl("http://127.0.0.1:8080/"), "http://127.0.0.1:8080/")
-  Assert.equal(try! prepareTransportUrl("http://[2001:db8::1]:8080/"), "http://[2001:db8::1]:8080/")
-  Assert.equal(try! prepareTransportUrl("http://2001:db8::1/"), "http://2001:db8::1/")
+  Assert.equal(prepareTransportUrl("https://Example.COM:443/path")!, "https://Example.COM:443/path")
+  Assert.equal(prepareTransportUrl("http://127.0.0.1:8080/")!, "http://127.0.0.1:8080/")
+  Assert.equal(prepareTransportUrl("http://[2001:db8::1]:8080/")!, "http://[2001:db8::1]:8080/")
+  Assert.equal(prepareTransportUrl("http://2001:db8::1/")!, "http://2001:db8::1/")
 }
 
 export function testPrepareTransportUrlLeavesUnsupportedAndMalformedUrlsAlone(): none {
-  Assert.equal(try! prepareTransportUrl("ftp://例え.テスト/file"), "ftp://例え.テスト/file")
-  Assert.equal(try! prepareTransportUrl("not-a-url"), "not-a-url")
-  Assert.equal(try! prepareTransportUrl("http:///path"), "http:///path")
-  Assert.equal(try! prepareTransportUrl("http://例え:bad:port/path"), "http://例え:bad:port/path")
+  Assert.equal(prepareTransportUrl("ftp://例え.テスト/file")!, "ftp://例え.テスト/file")
+  Assert.equal(prepareTransportUrl("not-a-url")!, "not-a-url")
+  Assert.equal(prepareTransportUrl("http:///path")!, "http:///path")
+  Assert.equal(prepareTransportUrl("http://例え:bad:port/path")!, "http://例え:bad:port/path")
 }
 
 export function testPrepareTransportUrlMapsPunycodeFailuresToInvalidUrl(): none {
