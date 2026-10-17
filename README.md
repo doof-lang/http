@@ -22,7 +22,7 @@ code uses the same Doof API on every backend.
 import { createClient, get } from "std/http"
 
 client := createClient()
-response := try! get(client, "https://example.com")
+response := get(client, "https://example.com")!
 
 if response.ok() {
   println(response.getText())
@@ -94,12 +94,12 @@ import { createClient, get, postJsonValue } from "std/http"
 
 client := createClient()
 
-users := try! get(client, "https://api.example.com/users")
+users := get(client, "https://api.example.com/users")!
 
-created := try! postJsonValue(client, "https://api.example.com/users", {
+created := postJsonValue(client, "https://api.example.com/users", {
   name: "Alice",
   role: "admin",
-})
+})!
 ```
 
 Use `send` with `HttpRequest` when you need custom methods, headers, a raw body,
@@ -121,7 +121,7 @@ request := HttpRequest {
   followRedirects: false,
 }
 
-response := try! send(createClient(), request)
+response := send(createClient(), request)!
 ```
 
 `HttpRequest.header(name)` returns the first matching request header, ignoring
@@ -133,12 +133,12 @@ case.
 body bytes.
 
 ```doof
-response := try! get(client, "https://api.example.com/users/42")
+response := get(client, "https://api.example.com/users/42")!
 
 contentType := response.header("Content-Type")
 bodyText := response.getText()
 bodyBytes := response.getBlob()
-json := try! response.getJsonValue()
+json := response.getJsonValue()!
 ```
 
 Available body helpers:
@@ -206,7 +206,7 @@ import {
   connectWebSocket,
 } from "std/http"
 
-socket := try! connectWebSocket(
+socket := connectWebSocket(
   "wss://example.com/socket",
   (event: WebSocketEvent): none => {
     case event {
@@ -214,9 +214,9 @@ socket := try! connectWebSocket(
       _ -> {}
     }
   },
-)
+)!
 
-try! socket.sendText("hello")
+socket.sendText("hello")!
 ```
 
 Native reads pause once `eventCapacity` events have been posted but not yet

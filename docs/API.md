@@ -17,7 +17,7 @@ Create one `HttpClient` with `createClient()` and reuse it:
 import { createClient, get } from "std/http"
 
 client := createClient()
-response := try! get(client, "https://example.com")
+response := get(client, "https://example.com")!
 ```
 
 `HttpClient` is an opaque native handle. Per-request behavior belongs on
@@ -46,7 +46,7 @@ request := HttpRequest {
   timeoutMs: 5000,
 }
 
-response := try! send(client, request)
+response := send(client, request)!
 ```
 
 HTTP error status codes are represented as successful `HttpResponse` values.
@@ -115,8 +115,8 @@ Responses are buffered by the native backend and exposed through helpers:
 - `getJsonValue()` parses the body text as JSON.
 
 ```doof
-response := try! get(client, "https://api.example.com/config")
-config := try! response.getJsonValue()
+response := get(client, "https://api.example.com/config")!
+config := response.getJsonValue()!
 ```
 
 ## Cookies
@@ -175,7 +175,7 @@ import {
   connectWebSocket,
 } from "std/http"
 
-socket := try! connectWebSocket(
+socket := connectWebSocket(
   "wss://example.com/socket",
   (event: WebSocketEvent): none => {
     case event {
@@ -183,9 +183,9 @@ socket := try! connectWebSocket(
       _ -> {}
     }
   },
-)
+)!
 
-try! socket.sendText("hello")
+socket.sendText("hello")!
 ```
 
 ## HTTP Functions
