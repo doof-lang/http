@@ -231,28 +231,23 @@ std::string NativeHttpWebSocketEvent::reason() const { return reason_; }
 bool NativeHttpWebSocketEvent::wasClean() const { return wasClean_; }
 std::string NativeHttpWebSocketEvent::error() const { return error_; }
 
+// Tasks that must not follow redirects carry this description. One delegate
+// serves every task on a client's shared session, so the redirect policy
+// travels with the task rather than the session.
+static NSString* const DoofHttpNoRedirectTask = @"doof-http-no-redirect";
+
 @interface DoofHttpRedirectDelegate : NSObject <NSURLSessionTaskDelegate>
-- (instancetype)initWithFollowRedirects:(BOOL)followRedirects;
 @end
 
-@implementation DoofHttpRedirectDelegate {
-    BOOL _followRedirects;
-}
-
-- (instancetype)initWithFollowRedirects:(BOOL)followRedirects {
-    self = [super init];
-    if (self != nil) {
-        _followRedirects = followRedirects;
-    }
-    return self;
-}
+@implementation DoofHttpRedirectDelegate
 
 - (void)URLSession:(NSURLSession*)session
               task:(NSURLSessionTask*)task
 willPerformHTTPRedirection:(NSHTTPURLResponse*)response
         newRequest:(NSURLRequest*)request
  completionHandler:(void (^)(NSURLRequest* _Nullable))completionHandler {
-    completionHandler(_followRedirects ? request : nil);
+    const BOOL follow = ![task.taskDescription isEqualToString:DoofHttpNoRedirectTask];
+    completionHandler(follow ? request : nil);
 }
 
 @end
@@ -260,6 +255,16 @@ willPerformHTTPRedirection:(NSHTTPURLResponse*)response
 class NativeHttpClient::Impl {
 public:
     Impl() : responseBody_(std::make_shared<std::vector<uint8_t>>()) {}
+
+    ~Impl() {
+        if (session_ != nil) {
+            [session_ invalidateAndCancel];
+            [session_ release];
+        }
+        if (delegate_ != nil) {
+            [delegate_ release];
+        }
+    }
 
     doof::Result<int32_t, std::string> perform(
         const std::string& method,
@@ -288,11 +293,7 @@ public:
                 request.HTTPBody = dataFromVector(*body);
             }
 
-            NSURLSessionConfiguration* config = [NSURLSessionConfiguration ephemeralSessionConfiguration];
-            config.timeoutIntervalForRequest = request.timeoutInterval;
-            config.timeoutIntervalForResource = request.timeoutInterval;
-            DoofHttpRedirectDelegate* delegate = [[DoofHttpRedirectDelegate alloc] initWithFollowRedirects:followRedirects ? YES : NO];
-            NSURLSession* session = [NSURLSession sessionWithConfiguration:config delegate:delegate delegateQueue:nil];
+            NSURLSession* session = sharedSession();
 
             dispatch_semaphore_t done = dispatch_semaphore_create(0);
             __block NSData* resultData = nil;
@@ -305,16 +306,38 @@ public:
                 resultError = [error retain];
                 dispatch_semaphore_signal(done);
             }];
+            if (!followRedirects) {
+                task.taskDescription = DoofHttpNoRedirectTask;
+            }
             [task resume];
-            dispatch_semaphore_wait(done, DISPATCH_TIME_FOREVER);
-            [session finishTasksAndInvalidate];
+
+            // The request's own timeout bounds idle time between bytes. The
+            // session is shared, so the whole-exchange limit is enforced here
+            // by cancelling the task once the deadline passes.
+            bool timedOut = false;
+            {
+                doof::CpuTokenRelease release;
+                const dispatch_time_t deadline = dispatch_time(
+                    DISPATCH_TIME_NOW,
+                    static_cast<int64_t>(request.timeoutInterval * NSEC_PER_SEC)
+                );
+                if (dispatch_semaphore_wait(done, deadline) != 0) {
+                    timedOut = true;
+                    [task cancel];
+                    dispatch_semaphore_wait(done, DISPATCH_TIME_FOREVER);
+                }
+            }
+            // Manual retain/release: a semaphore that blocked owns a kernel
+            // port, so leaking one per request exhausts the port table.
+            dispatch_release(done);
 
             if (resultError != nil) {
-                std::string encoded = encodeError(resultError, "HTTP request failed");
+                std::string encoded = timedOut && resultError.code == NSURLErrorCancelled
+                    ? encodeError("timeout", std::to_string(static_cast<long long>(NSURLErrorTimedOut)), "The request timed out.")
+                    : encodeError(resultError, "HTTP request failed");
                 [resultData release];
                 [resultResponse release];
                 [resultError release];
-                [delegate release];
                 return doof::Failure<std::string>{encoded};
             }
 
@@ -325,7 +348,6 @@ public:
                 [resultData release];
                 [resultResponse release];
                 [resultError release];
-                [delegate release];
                 return doof::Failure<std::string>{"transport|0|response was not HTTP"};
             }
 
@@ -335,7 +357,6 @@ public:
             [resultData release];
             [resultResponse release];
             [resultError release];
-            [delegate release];
             return doof::Success<int32_t>{static_cast<int32_t>(httpResponse.statusCode)};
         }
     }
@@ -345,6 +366,27 @@ public:
     std::shared_ptr<std::vector<uint8_t>> responseBody() const { return responseBody_; }
 
 private:
+    // One session per client keeps connections alive across requests. It is
+    // stateless like the per-request sessions it replaced: no cookie jar,
+    // response cache, or credential store.
+    NSURLSession* sharedSession() {
+        std::lock_guard<std::mutex> lock(sessionMutex_);
+        if (session_ == nil) {
+            NSURLSessionConfiguration* config = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+            config.HTTPCookieStorage = nil;
+            config.HTTPShouldSetCookies = NO;
+            config.HTTPCookieAcceptPolicy = NSHTTPCookieAcceptPolicyNever;
+            config.URLCache = nil;
+            config.URLCredentialStorage = nil;
+            delegate_ = [[DoofHttpRedirectDelegate alloc] init];
+            session_ = [[NSURLSession sessionWithConfiguration:config delegate:delegate_ delegateQueue:nil] retain];
+        }
+        return session_;
+    }
+
+    std::mutex sessionMutex_;
+    NSURLSession* session_ = nil;
+    DoofHttpRedirectDelegate* delegate_ = nil;
     std::string responseStatusText_;
     std::string responseHeadersText_;
     std::shared_ptr<std::vector<uint8_t>> responseBody_;

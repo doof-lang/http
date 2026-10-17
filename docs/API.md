@@ -23,6 +23,12 @@ response := get(client, "https://example.com")!
 `HttpClient` is an opaque native handle. Per-request behavior belongs on
 `HttpRequest`, so a client can be shared across many calls.
 
+On Apple platforms a client keeps its connections open and reuses them for
+later requests to the same host. The Linux curl and Windows WinHTTP transports
+currently open a new connection for every request. The Apple client does not
+store cookies or cache responses between requests. A native `send` blocks its
+caller but does not hold a runtime CPU token while it waits.
+
 ## Request Flow
 
 Use `get` and `postJsonValue` for common requests. Use `send` with

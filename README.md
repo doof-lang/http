@@ -35,6 +35,16 @@ Create one `HttpClient` with `createClient()` and reuse it. The client is an
 opaque native handle; method, URL, headers, body, timeout, and redirect behavior
 all live on each request.
 
+On Apple platforms a client keeps its connections open and reuses them for
+later requests to the same host, so reusing one client avoids a new TCP (and
+TLS) handshake per request. The Linux curl and Windows WinHTTP transports
+currently open a new connection for every request. The Apple client does not
+store cookies or cache responses between requests.
+
+A native `send` blocks its caller until the response arrives, but it does not
+hold one of the runtime's CPU tokens while it waits, so many actors can wait on
+requests at once without starving other work.
+
 HTTP status codes such as `404` and `500` still return `Success<HttpResponse>`.
 Only transport-level failures, invalid URLs, and native backend errors return
 `Failure<HttpError>`.
