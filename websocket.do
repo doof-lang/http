@@ -1,5 +1,4 @@
 import { BlobBuilder } from "std/blob"
-import { ChannelReceiver, ChannelSender, createChannel } from "std/event"
 
 import { HttpError, HttpHeader } from "./types"
 import { prepareTransportUrl } from "./transport_url"
@@ -17,12 +16,13 @@ import class NativeHttpWebSocketConnection from "./native_http_client.hpp" {
   isolated sendBinary(bytes: readonly byte[]): Result<none, string>
   isolated ping(): Result<none, string>
   isolated close(code: int, reason: string): Result<none, string>
-  isolated attachChannels(
+  isolated attachHandler(
     connection: WebSocketConnection,
-    eventSender: ChannelSender<WebSocketEvent>,
-    commandReceiver: ChannelReceiver<WebSocketCommand>,
+    onEvent: (event: WebSocketEvent): none,
+    eventCapacity: int,
   ): none
   isolated start(): none
+  isolated eventHandled(): none
   isolated resumeInboundReads(): none
   isolated state(): int
 }
@@ -45,8 +45,12 @@ export readonly WEBSOCKET_CLOSE_MESSAGE_TOO_BIG = 1009
 export readonly WEBSOCKET_CLOSE_INTERNAL_ERROR = 1011
 
 export class WebSocketOptions {
+  // Inbound events posted to the handler but not yet handled before the
+  // connection stops reading from the socket.
   readonly eventCapacity: int = 1024
-  readonly commandCapacity: int = 1024
+  // Sends accepted but not yet written before `sendText` and friends fail
+  // with a backpressure error; `WebSocketWritable` reports the queue drained.
+  readonly outboundCapacity: int = 1024
   readonly headers: readonly HttpHeader[] = []
   readonly timeoutMs: int = 30000
 }
@@ -59,148 +63,106 @@ export type WebSocketEvent =
   WebSocketClose |
   WebSocketError
 
-export type WebSocketCommand =
-  WebSocketSendText |
-  WebSocketSendBinary |
-  WebSocketPing |
-  WebSocketCloseCommand
-
 export class WebSocketOpen {
-  readonly connection: WebSocketConnection
+  connection: WebSocketConnection
 }
 
 export class WebSocketText {
-  readonly connection: WebSocketConnection
+  connection: WebSocketConnection
   readonly text: string
 }
 
 export class WebSocketBinary {
-  readonly connection: WebSocketConnection
+  connection: WebSocketConnection
   readonly bytes: readonly byte[]
 }
 
 export class WebSocketWritable {
-  readonly connection: WebSocketConnection
+  connection: WebSocketConnection
 }
 
 export class WebSocketClose {
-  readonly connection: WebSocketConnection
+  connection: WebSocketConnection
   readonly code: int
   readonly reason: string
   readonly wasClean: bool
 }
 
 export class WebSocketError {
-  readonly connection: WebSocketConnection
+  connection: WebSocketConnection
   readonly error: HttpError
-}
-
-export class WebSocketSendText {
-  readonly text: string
-  readonly coalesceKey: string | none = none
-}
-
-export class WebSocketSendBinary {
-  readonly bytes: readonly byte[]
-  readonly coalesceKey: string | none = none
-}
-
-export class WebSocketPing {
-}
-
-export class WebSocketCloseCommand {
-  readonly code: int = 1000
-  readonly reason: string = ""
 }
 
 export class WebSocketConnection {
   readonly url: string
-  readonly events: ChannelReceiver<WebSocketEvent>
-  readonly commands: ChannelSender<WebSocketCommand>
   readonly options: WebSocketOptions = WebSocketOptions {}
-  private readonly eventSender: ChannelSender<WebSocketEvent>
-  private readonly commandReceiver: ChannelReceiver<WebSocketCommand>
-  private readonly native: NativeHttpWebSocketConnection
+  private native: NativeHttpWebSocketConnection
 
   state(): WebSocketState {
     return nativeStateToPublic(this.native.state())
   }
 
-  close(): none {
-    ignored := this.native.close(WEBSOCKET_CLOSE_NORMAL, "")
-    this.commands.close()
-    this.events.close()
+  sendText(text: string): Result<none, HttpError> {
+    return mapWebSocketResult(this.native.sendText(text))
+  }
+
+  sendBinary(bytes: readonly byte[]): Result<none, HttpError> {
+    return mapWebSocketResult(this.native.sendBinary(bytes))
+  }
+
+  ping(): Result<none, HttpError> {
+    return mapWebSocketResult(this.native.ping())
+  }
+
+  close(code: int = WEBSOCKET_CLOSE_NORMAL, reason: string = ""): Result<none, HttpError> {
+    return mapWebSocketResult(this.native.close(code, reason))
   }
 }
 
+// Events are delivered to `onEvent` on the actor that created it, in order,
+// starting with `WebSocketOpen`.
 export function connectWebSocket(
   url: string,
+  onEvent: (event: WebSocketEvent): none,
   options: WebSocketOptions = WebSocketOptions {},
 ): Result<WebSocketConnection, HttpError> {
-  if options.commandCapacity <= 0 || options.eventCapacity <= 0 {
-    panic("WebSocket channel capacities must be positive")
+  if options.outboundCapacity <= 0 || options.eventCapacity <= 0 {
+    panic("WebSocket capacities must be positive")
   }
 
   transportUrl := prepareTransportUrl(url) else error {
     return Failure { error: error }
   }
 
-  (eventSender, events) := createChannel<WebSocketEvent>{
-    capacity: options.eventCapacity,
-    keepsAlive: true,
-  }
-  (commands, commandReceiver) := createChannel<WebSocketCommand>{
-    capacity: options.commandCapacity,
-    keepsAlive: true,
-  }
-
-  let connection: WebSocketConnection | none = none
-  nativeResult := NativeHttpWebSocketConnection.connect(
+  native := NativeHttpWebSocketConnection.connect(
     transportUrl,
     renderHeaders(options.headers),
     options.timeoutMs,
-    1,
+    options.outboundCapacity,
+    options.eventCapacity,
+  ) else error {
+    return Failure { error: parseWebSocketError(error) }
+  }
+
+  connection := WebSocketConnection { url, options, native }
+  native.attachHandler(
+    connection,
+    (event: WebSocketEvent): none => {
+      onEvent(event)
+      native.eventHandled()
+    },
     options.eventCapacity,
   )
+  native.start()
 
-  let native: NativeHttpWebSocketConnection | none = none
-  case nativeResult {
-    s: Success -> {
-      native = s.value
-    }
-    f: Failure -> {
-      commands.close()
-      events.close()
-      return Failure { error: parseWebSocketError(f.error) }
-    }
-  }
-
-  actualConnection := WebSocketConnection {
-    url,
-    events,
-    commands,
-    options,
-    eventSender,
-    commandReceiver,
-    native: native!,
-  }
-  connection = actualConnection
-
-  actualConnection.native.attachChannels(actualConnection, eventSender, commandReceiver)
-
-  emitLocalWebSocketEvent(actualConnection, WebSocketOpen {
-    connection: actualConnection,
-  })
-  actualConnection.native.start()
-
-  return Success { value: actualConnection }
+  return Success { value: connection }
 }
 
-function emitLocalWebSocketEvent(
-  connection: WebSocketConnection,
-  event: WebSocketEvent,
-): none {
-  ignored := connection.eventSender.send(event)
+function mapWebSocketResult(result: Result<none, string>): Result<none, HttpError> {
+  return case result {
+    _: Success -> Success {},
+    f: Failure -> Failure { error: parseWebSocketError(f.error) },
+  }
 }
 
 function nativeStateToPublic(state: int): WebSocketState {

@@ -242,11 +242,13 @@ doof::Result<void, std::string> NativeHttpWebSocketConnection::close(
 ) {
     return doof::Failure<std::string>{"WebSocket support is not implemented in WebAssembly"};
 }
-void NativeHttpWebSocketConnection::attachNativeChannels(
+void NativeHttpWebSocketConnection::attachHandler(
     std::shared_ptr<std_::http::websocket::WebSocketConnection>,
-    std::shared_ptr<doof_event::NativeChannel>,
-    std::shared_ptr<doof_event::NativeChannel>
+    EventHandler,
+    int32_t
 ) {}
+
+void NativeHttpWebSocketConnection::eventHandled() {}
 void NativeHttpWebSocketConnection::resumeInboundReads() {}
 int32_t NativeHttpWebSocketConnection::state() const {
     return static_cast<int32_t>(NativeHttpWebSocketState::Error);

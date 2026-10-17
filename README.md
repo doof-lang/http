@@ -193,37 +193,37 @@ headers.
 
 ## WebSockets
 
-`connectWebSocket(url, options)` opens a `ws://` or `wss://` connection and
-returns paired bounded channels:
-
-- `events` receives open, text, binary, writable, close, and error events.
-- `commands` sends text, binary, ping, and close commands.
+`connectWebSocket(url, onEvent, options)` opens a `ws://` or `wss://`
+connection. Open, text, binary, writable, close, and error events are posted to
+`onEvent` in order on the actor that created it; writes call `sendText`,
+`sendBinary`, `ping`, and `close` on the returned connection. An open connection
+keeps `runMainEventLoop()` running until it closes or fails.
 
 ```doof
 import {
-  WebSocketSendText,
+  WebSocketEvent,
   WebSocketText,
   connectWebSocket,
 } from "std/http"
 
-socket := try! connectWebSocket("wss://example.com/socket")
+socket := try! connectWebSocket(
+  "wss://example.com/socket",
+  (event: WebSocketEvent): none => {
+    case event {
+      text: WebSocketText -> println(text.text),
+      _ -> {}
+    }
+  },
+)
 
-socket.events.onMessage((event): void => {
-  text := event as WebSocketText
-  case text {
-    s: Success -> println(s.value.text)
-    _: Failure -> {}
-  }
-})
-
-try! socket.commands.send(WebSocketSendText {
-  text: "hello",
-})
+try! socket.sendText("hello")
 ```
 
-Inbound backpressure pauses native reads when the event channel is full.
-Outbound backpressure is governed by the command channel. Use
-`WebSocketOptions` to set handshake headers, timeout, and channel capacities.
+Native reads pause once `eventCapacity` events have been posted but not yet
+handled, and resume when half have been handled. Writes fail with a
+`backpressure` error once `outboundCapacity` messages are waiting to be written;
+`WebSocketWritable` reports that the outbound queue has drained. Use `WebSocketOptions` to set handshake headers, timeout,
+and capacities.
 
 ## API Overview
 
@@ -257,11 +257,6 @@ WebSocket types:
 - `WebSocketOptions`
 - `WebSocketConnection`
 - `WebSocketEvent`
-- `WebSocketCommand`
-- `WebSocketSendText`
-- `WebSocketSendBinary`
-- `WebSocketPing`
-- `WebSocketCloseCommand`
 - `connectWebSocket`
 
 See [docs/API.md](docs/API.md) for field tables and detailed behavior.

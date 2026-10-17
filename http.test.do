@@ -3,6 +3,7 @@ import { Assert } from "std/assert"
 import {
   Cookie,
   SetCookie,
+  WebSocketEvent,
   WebSocketOptions,
   cookieValue,
   connectWebSocket,
@@ -123,9 +124,11 @@ export function testRenderSetCookieHeaderUsesStableAttributeOrder(): none {
 }
 
 export function testConnectWebSocketReportsInvalidUrlAsHttpError(): none {
-  result := connectWebSocket("not-a-websocket-url", WebSocketOptions {
-    timeoutMs: 100,
-  })
+  result := connectWebSocket(
+    "not-a-websocket-url",
+    (event: WebSocketEvent): none => {},
+    WebSocketOptions { timeoutMs: 100 },
+  )
 
   case result {
     _: Success -> Assert.fail("expected websocket connection to fail")

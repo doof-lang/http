@@ -1,16 +1,14 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <variant>
 #include <vector>
 
 #include "doof_runtime.hpp"
-
-namespace doof_event {
-class NativeChannel;
-}
 
 namespace std_::http::types {
 struct HttpError;
@@ -19,16 +17,116 @@ struct HttpError;
 namespace std_::http::websocket {
 struct WebSocketBinary;
 struct WebSocketClose;
-struct WebSocketCloseCommand;
 struct WebSocketConnection;
 struct WebSocketError;
 struct WebSocketOpen;
-struct WebSocketPing;
-struct WebSocketSendBinary;
-struct WebSocketSendText;
 struct WebSocketText;
 struct WebSocketWritable;
 }
+
+namespace doof_http_detail {
+
+// Posts WebSocket events to a Doof handler on the handler's owning actor.
+// It counts events posted but not yet handled so a connection can pause
+// inbound reads, and keeps the root event loop alive until the terminal
+// event is posted.
+template <typename Event>
+class PostedEventWindow {
+public:
+    using Handler = doof::callback<void(Event)>;
+
+    ~PostedEventWindow() {
+        releaseKeepAlive();
+    }
+
+    void attach(Handler handler, int32_t capacity) {
+        bool retain = false;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            handler_ = std::move(handler);
+            capacity_ = std::max<int32_t>(capacity, 1);
+            retain = !keepingAlive_;
+            keepingAlive_ = true;
+        }
+        if (retain) {
+            doof::detail::ApplicationDomain::shared().add_keep_alive_source(true);
+        }
+    }
+
+    // Returns 0 to keep reading, 1 to pause reads until `handled` reports a
+    // resume, or 2 when the handler's actor cannot accept events. Terminal
+    // events are never shed for a merely busy owner, and release the handler.
+    int32_t deliver(Event event, bool terminal) {
+        Handler handler;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            handler = handler_;
+            if (terminal) {
+                handler_ = {};
+            }
+            if (!handler) {
+                return 0;
+            }
+            ++pending_;
+        }
+
+        int32_t pressure = 0;
+        auto posted = handler.tryPost(event);
+        if (doof::is_success(posted)) {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (!terminal && pending_ >= capacity_) {
+                paused_ = true;
+                pressure = 1;
+            }
+        } else if (terminal && doof::failure_error(posted) == "full") {
+            handler.dispatch(std::move(event));
+        } else {
+            std::lock_guard<std::mutex> lock(mutex_);
+            --pending_;
+            pressure = terminal ? 0 : 2;
+        }
+        if (terminal) {
+            releaseKeepAlive();
+        }
+        return pressure;
+    }
+
+    // Called on the handler's actor after each event. Returns true when
+    // paused reads should resume because half the window has drained.
+    bool handled() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (pending_ > 0) {
+            --pending_;
+        }
+        if (paused_ && pending_ <= capacity_ / 2) {
+            paused_ = false;
+            return true;
+        }
+        return false;
+    }
+
+private:
+    void releaseKeepAlive() {
+        bool release = false;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            release = keepingAlive_;
+            keepingAlive_ = false;
+        }
+        if (release) {
+            doof::detail::ApplicationDomain::shared().remove_keep_alive_source(true);
+        }
+    }
+
+    std::mutex mutex_;
+    Handler handler_;
+    int32_t capacity_ = 1;
+    int32_t pending_ = 0;
+    bool paused_ = false;
+    bool keepingAlive_ = false;
+};
+
+}  // namespace doof_http_detail
 
 class NativeHttpClient {
 public:
@@ -110,12 +208,7 @@ public:
         std::shared_ptr<std_::http::websocket::WebSocketClose>,
         std::shared_ptr<std_::http::websocket::WebSocketError>
     >;
-    using PublicCommand = std::variant<
-        std::shared_ptr<std_::http::websocket::WebSocketSendText>,
-        std::shared_ptr<std_::http::websocket::WebSocketSendBinary>,
-        std::shared_ptr<std_::http::websocket::WebSocketPing>,
-        std::shared_ptr<std_::http::websocket::WebSocketCloseCommand>
-    >;
+    using EventHandler = doof::callback<void(PublicEvent)>;
     static doof::Result<std::shared_ptr<NativeHttpWebSocketConnection>, std::string> connect(
         const std::string& url,
         const std::string& requestHeaders,
@@ -132,26 +225,15 @@ public:
     doof::Result<void, std::string> sendBinary(std::shared_ptr<std::vector<uint8_t>> bytes);
     doof::Result<void, std::string> ping();
     doof::Result<void, std::string> close(int32_t code, const std::string& reason);
-    template <typename EventSender, typename CommandReceiver>
-    void attachChannels(
+    void attachHandler(
         std::shared_ptr<std_::http::websocket::WebSocketConnection> connection,
-        std::shared_ptr<EventSender> eventSender,
-        std::shared_ptr<CommandReceiver> commandReceiver
-    ) {
-        attachNativeChannels(
-            connection,
-            eventSender ? eventSender->native : nullptr,
-            commandReceiver ? commandReceiver->native : nullptr
-        );
-    }
+        EventHandler onEvent,
+        int32_t eventCapacity
+    );
+    void eventHandled();
     void resumeInboundReads();
     int32_t state() const;
 
 private:
-    void attachNativeChannels(
-        std::shared_ptr<std_::http::websocket::WebSocketConnection> connection,
-        std::shared_ptr<doof_event::NativeChannel> eventChannel,
-        std::shared_ptr<doof_event::NativeChannel> commandChannel
-    );
     std::shared_ptr<class NativeHttpWebSocketConnectionImpl> impl_;
 };

@@ -18,16 +18,11 @@ export {
   WEBSOCKET_CLOSE_UNSUPPORTED_DATA,
   WebSocketBinary,
   WebSocketClose,
-  WebSocketCloseCommand,
-  WebSocketCommand,
   WebSocketConnection,
   WebSocketError,
   WebSocketEvent,
   WebSocketOpen,
   WebSocketOptions,
-  WebSocketPing,
-  WebSocketSendBinary,
-  WebSocketSendText,
   WebSocketState,
   WebSocketText,
   WebSocketWritable,
@@ -137,7 +132,7 @@ export class HttpResponse {
 }
 
 export class HttpClient {
-  readonly native: NativeHttpClient
+  native: NativeHttpClient
 }
 
 export function createClient(): HttpClient {

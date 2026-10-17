@@ -157,37 +157,35 @@ responseHeader := renderSetCookieHeader(SetCookie {
 
 ## WebSockets
 
-`connectWebSocket(url, options)` supports `ws://` and `wss://` URLs. The
-returned connection has paired bounded channels:
+`connectWebSocket(url, onEvent, options)` opens a `ws://` or `wss://`
+connection. Open, text, binary, writable, close, and error events are posted to
+`onEvent` in order on the actor that created it; writes call `sendText`,
+`sendBinary`, `ping`, and `close` on the returned connection. An open connection
+keeps `runMainEventLoop()` running until it closes or fails.
 
-- `events` receives open, text, binary, writable, close, and error events.
-- `commands` sends text, binary, ping, and close commands.
-
-Inbound backpressure pauses native reads when the event channel is full.
-Outbound backpressure is governed by the command channel. Message commands can
-carry an optional `coalesceKey`; command coalescing is handled by the command
-channel.
+Native reads pause once `eventCapacity` events have been posted but not yet
+handled, and resume when half have been handled. Writes fail with a
+`backpressure` error once `outboundCapacity` messages are waiting to be written;
+`WebSocketWritable` reports that the outbound queue has drained.
 
 ```doof
 import {
-  WebSocketSendText,
+  WebSocketEvent,
   WebSocketText,
   connectWebSocket,
 } from "std/http"
 
-socket := try! connectWebSocket("wss://example.com/socket")
+socket := try! connectWebSocket(
+  "wss://example.com/socket",
+  (event: WebSocketEvent): none => {
+    case event {
+      text: WebSocketText -> println(text.text),
+      _ -> {}
+    }
+  },
+)
 
-socket.events.onMessage((event): void => {
-  text := event as WebSocketText
-  case text {
-    s: Success -> println(s.value.text)
-    _: Failure -> {}
-  }
-})
-
-try! socket.commands.send(WebSocketSendText {
-  text: "hello",
-})
+try! socket.sendText("hello")
 ```
 
 ## HTTP Functions
@@ -333,16 +331,17 @@ order: `Expires`, `Max-Age`, `Domain`, `Path`, `SameSite`, `Secure`,
 
 ## WebSocket API
 
-### `connectWebSocket(url: string, options: WebSocketOptions = WebSocketOptions {}): Result<WebSocketConnection, HttpError>`
+### `connectWebSocket(url: string, onEvent: (event: WebSocketEvent): none, options: WebSocketOptions = WebSocketOptions {}): Result<WebSocketConnection, HttpError>`
 
-Open a WebSocket connection.
+Open a WebSocket connection. Events are posted to `onEvent` on the actor that
+created it, starting with `WebSocketOpen`.
 
 ### `WebSocketOptions`
 
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
-| `eventCapacity` | `int` | `1024` | Maximum queued inbound events before reads pause |
-| `commandCapacity` | `int` | `1024` | Maximum queued outbound commands |
+| `eventCapacity` | `int` | `1024` | Posted but unhandled inbound events before reads pause |
+| `outboundCapacity` | `int` | `1024` | Messages waiting to be written before sends fail |
 | `headers` | `readonly HttpHeader[]` | `[]` | Additional handshake headers |
 | `timeoutMs` | `int` | `30000` | Connection timeout in milliseconds |
 
@@ -351,16 +350,28 @@ Open a WebSocket connection.
 | Field | Type | Description |
 | --- | --- | --- |
 | `url` | `string` | Original WebSocket URL |
-| `events` | `ChannelReceiver<WebSocketEvent>` | Inbound event channel |
-| `commands` | `ChannelSender<WebSocketCommand>` | Outbound command channel |
+| `options` | `WebSocketOptions` | Options the connection was opened with |
 
 #### `state(): WebSocketState`
 
 Return the current connection state.
 
-#### `close(): void`
+#### `sendText(text: string): Result<none, HttpError>`
 
-Queue a normal close and close the public channels.
+Queue a text message.
+
+#### `sendBinary(bytes: readonly byte[]): Result<none, HttpError>`
+
+Queue a binary message.
+
+#### `ping(): Result<none, HttpError>`
+
+Send a ping frame.
+
+#### `close(code: int = 1000, reason: string = ""): Result<none, HttpError>`
+
+Queue a close frame. The `WebSocketClose` event follows once the close
+completes.
 
 ### `WebSocketEvent`
 
@@ -372,40 +383,6 @@ Union of:
 - `WebSocketWritable`
 - `WebSocketClose`
 - `WebSocketError`
-
-### `WebSocketCommand`
-
-Union of:
-
-- `WebSocketSendText`
-- `WebSocketSendBinary`
-- `WebSocketPing`
-- `WebSocketCloseCommand`
-
-### `WebSocketSendText`
-
-| Field | Type | Default | Description |
-| --- | --- | --- | --- |
-| `text` | `string` | Required | Text message to send |
-| `coalesceKey` | `string \| null` | `null` | Optional command coalescing key |
-
-### `WebSocketSendBinary`
-
-| Field | Type | Default | Description |
-| --- | --- | --- | --- |
-| `bytes` | `readonly byte[]` | Required | Binary message to send |
-| `coalesceKey` | `string \| null` | `null` | Optional command coalescing key |
-
-### `WebSocketPing`
-
-Send a ping frame.
-
-### `WebSocketCloseCommand`
-
-| Field | Type | Default | Description |
-| --- | --- | --- | --- |
-| `code` | `int` | `1000` | WebSocket close code |
-| `reason` | `string` | `""` | WebSocket close reason |
 
 ## Backend Notes
 
