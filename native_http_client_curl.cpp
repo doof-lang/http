@@ -236,7 +236,11 @@ public:
             curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(body->size()));
         }
 
-        const CURLcode result = curl_easy_perform(handle);
+        CURLcode result;
+        {
+            doof::CpuTokenRelease release;
+            result = curl_easy_perform(handle);
+        }
         if (result != CURLE_OK) {
             const std::string encoded = encodeError(result, curl_easy_strerror(result));
             if (headerList != nullptr) {
@@ -337,7 +341,11 @@ public:
             curl_easy_setopt(handle, CURLOPT_HTTPHEADER, headerList);
         }
 
-        const CURLcode result = curl_easy_perform(handle);
+        CURLcode result;
+        {
+            doof::CpuTokenRelease release;
+            result = curl_easy_perform(handle);
+        }
         if (result != CURLE_OK) {
             const std::string encoded = encodeError(result, curl_easy_strerror(result));
             if (headerList != nullptr) {
