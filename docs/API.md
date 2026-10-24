@@ -392,9 +392,10 @@ Union of:
 
 ## Backend Notes
 
-Linux builds use the curated curl source tree bundled in `vendor/curl`, build a
-static archive under `vendor/curl/.doof-build/linux`, and link it through the
-package's native build metadata. The curl build uses the host OpenSSL development
+Linux builds use the curated curl source tree bundled in `vendor/curl`. The
+compiler runs `vendor/build.sh` in a private copy of that tree to build a static
+`libcurl.a` per target and build mode, and links it after the generated objects.
+The curl build uses the host OpenSSL development
 package discovered through `pkg-config`. Apple targets link against Foundation,
 Windows links against WinHTTP, and browser WebAssembly uses the JavaScript fetch
 bridge.

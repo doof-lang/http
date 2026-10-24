@@ -3,22 +3,6 @@
   "version": "0.2.0",
   "license": "ISC",
   "build": {
-    "stdlib": {
-      "prepare": [
-        {
-          "program": "sh",
-          "args": [
-            "${packageRoot}/build-curl.sh",
-            "${packageRoot}/vendor/curl",
-            "${nativeTarget}",
-            "${configureHost}",
-            "${targetTriple}",
-            "${sdkPath}",
-            "${jobs}"
-          ]
-        }
-      ]
-    },
     "native": {
       "extraCopyPaths": [
         "native_http_client.hpp",
@@ -49,12 +33,12 @@
         ]
       },
       "linux": {
+        "vendor": {
+          "key": "curl-8.20.0-r1",
+          "static": ["libcurl.a"]
+        },
         "sourceFiles": [
           "native_http_client_curl.cpp"
-        ],
-        "extraCopyPaths": [
-          "vendor/curl/COPYING",
-          "vendor/curl/RELEASE-NOTES"
         ],
         "pkgConfigPackages": [
           "openssl"
@@ -64,15 +48,6 @@
         ],
         "linkerFlags": [
           "-pthread"
-        ],
-        "includePaths": [
-          "vendor/curl/.doof-build/linux/include"
-        ],
-        "libraryPaths": [
-          "vendor/curl/.doof-build/linux/lib"
-        ],
-        "linkLibraries": [
-          "curl"
         ]
       },
       "windows": {
