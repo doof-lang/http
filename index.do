@@ -82,12 +82,7 @@ export class HttpRequest {
 
   header(name: string): string | none {
     lowerName := name.toLowerCase()
-    for entry of headers {
-      if entry.name.toLowerCase() == lowerName {
-        return entry.value
-      }
-    }
-    return none
+    return headers.find(=> it.name.toLowerCase() == lowerName)?.value
   }
 }
 
@@ -103,12 +98,7 @@ export class HttpResponse {
 
   header(name: string): string | none {
     lowerName := name.toLowerCase()
-    for entry of headers {
-      if entry.name.toLowerCase() == lowerName {
-        return entry.value
-      }
-    }
-    return none
+    return headers.find(=> it.name.toLowerCase() == lowerName)?.value
   }
 
   getBlob(): readonly byte[] {
@@ -285,25 +275,20 @@ export function parseSetCookieHeader(header: string): SetCookie | none {
 
 export function renderSetCookieHeader(cookie: SetCookie): string {
   let text = "${cookie.name}=${cookie.value}"
-  expires := cookie.expires
-  if expires != none {
-    text += "; Expires=${expires!}"
+  if expires := cookie.expires {
+    text += "; Expires=${expires}"
   }
-  maxAge := cookie.maxAge
-  if maxAge != none {
-    text += "; Max-Age=${maxAge!}"
+  if maxAge := cookie.maxAge {
+    text += "; Max-Age=${maxAge}"
   }
-  domain := cookie.domain
-  if domain != none {
-    text += "; Domain=${domain!}"
+  if domain := cookie.domain {
+    text += "; Domain=${domain}"
   }
-  path := cookie.path
-  if path != none {
-    text += "; Path=${path!}"
+  if path := cookie.path {
+    text += "; Path=${path}"
   }
-  sameSite := cookie.sameSite
-  if sameSite != none {
-    text += "; SameSite=${sameSite!}"
+  if sameSite := cookie.sameSite {
+    text += "; SameSite=${sameSite}"
   }
   if cookie.secure {
     text += "; Secure"
@@ -315,12 +300,7 @@ export function renderSetCookieHeader(cookie: SetCookie): string {
 }
 
 export function cookieValue(cookies: readonly Cookie[], name: string): string | none {
-  for cookie of cookies {
-    if cookie.name == name {
-      return cookie.value
-    }
-  }
-  return none
+  return cookies.find(=> it.name == name)?.value
 }
 
 export function send(client: HttpClient, request: HttpRequest): Result<HttpResponse, HttpError> {
